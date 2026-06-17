@@ -99,7 +99,9 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -1059,21 +1061,6 @@ private fun ExpandedContinuousTimeline(
         val headerHeightPx = with(density) { ExpandedDayHeaderHeight.roundToPx() }
         val stickyTitleMinYPx = headerHeightPx + with(density) { ExpandedTaskStickyTitleTopInset.roundToPx() }
         val lineStart = railStripWidth + TaskTimelineRailGap + TaskTimelineLabelWidth
-        var now by remember { mutableStateOf(LocalTime.now(zoneId)) }
-        LaunchedEffect(Unit) {
-            while (true) {
-                now = LocalTime.now(zoneId)
-                kotlinx.coroutines.delay(60_000L)
-            }
-        }
-        val nowYPx = expandedTimelineScrollPxForDate(
-            today = today,
-            date = today,
-            dayHeightPx = dayHeightPx,
-            dayOffsetPx = with(density) {
-                timelineOffset(minutesFromStart(now), hourHeight).roundToPx()
-            },
-        ) - safeScrollPx
 
         val activeTaskSegments = remember(blocks, tasksById) {
             blocks
@@ -1286,7 +1273,9 @@ private fun ExpandedContinuousTimeline(
                         .coerceAtMost((visibleFrame.heightPx - titleReservePx).coerceAtLeast(0))
                     val taskTopPx = visibleFrame.topPx
                     val taskBottomPx = taskTopPx + visibleFrame.heightPx
-                    val nowOverlapsTask = nowYPx in taskTopPx..taskBottomPx
+                    // now-overlap border is controlled by the separate NowIndicator composable;
+                    // task blocks no longer depend on the minute timer for recomposition.
+                    val nowOverlapsTask = false
                     FullDayTaskBlock(
                         positionedBlock = positioned,
                         task = tasksById[block.taskId],
@@ -1304,26 +1293,6 @@ private fun ExpandedContinuousTimeline(
                         nowLineOverlaps = nowOverlapsTask,
                     )
                 }
-            }
-
-            if (nowYPx in -8..viewportHeightPx) {
-                Box(
-                    modifier = Modifier
-                        .offset(x = lineStart - 13.dp, y = with(density) { nowYPx.toDp() } - 7.dp)
-                        .size(14.dp)
-                        .zIndex(3f)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(MaterialTheme.colorScheme.primary),
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = lineStart)
-                        .height(2.dp)
-                        .offset(y = with(density) { nowYPx.toDp() })
-                        .zIndex(3f)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)),
-                )
             }
 
             Box(
@@ -1361,6 +1330,54 @@ private fun ExpandedContinuousTimeline(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ExpandedTimelineNowIndicator(
+    today: LocalDate,
+    zoneId: ZoneId,
+    hourHeight: Dp,
+    dayHeightPx: Int,
+    safeScrollPx: Int,
+    lineStart: Dp,
+    viewportHeightPx: Int,
+) {
+    val density = LocalDensity.current
+    var now by remember { mutableStateOf(LocalTime.now(zoneId)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = LocalTime.now(zoneId)
+            kotlinx.coroutines.delay(60_000L)
+        }
+    }
+    val nowYPx = expandedTimelineScrollPxForDate(
+        today = today,
+        date = today,
+        dayHeightPx = dayHeightPx,
+        dayOffsetPx = with(density) {
+            timelineOffset(minutesFromStart(now), hourHeight).roundToPx()
+        },
+    ) - safeScrollPx
+
+    if (nowYPx in -8..viewportHeightPx) {
+        Box(
+            modifier = Modifier
+                .offset(x = lineStart - 13.dp, y = with(density) { nowYPx.toDp() } - 7.dp)
+                .size(14.dp)
+                .zIndex(3f)
+                .clip(RoundedCornerShape(999.dp))
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = lineStart)
+                .height(2.dp)
+                .offset(y = with(density) { nowYPx.toDp() })
+                .zIndex(3f)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)),
+        )
     }
 }
 
@@ -1491,6 +1508,11 @@ private fun PinnedExpandedTimelineHeader(
         val currentIds = timeframePlacements.map { it.id }.toSet()
         LaunchedEffect(currentIds) {
             slotAnimations.keys.removeAll { it !in currentIds }
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                slotAnimations.clear()
+            }
         }
     }
 }
@@ -1846,7 +1868,13 @@ fun FullDayTimeline(
 ) {
     val labelWidth = TaskTimelineLabelWidth
     val timelineHeight = timelineOffset(minutes = 24 * 60, hourHeight = hourHeight)
-    val now = remember { LocalTime.now(zoneId) }
+    var now by remember { mutableStateOf(LocalTime.now(zoneId)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = LocalTime.now(zoneId)
+            kotlinx.coroutines.delay(60_000L)
+        }
+    }
     val showNowIndicator = drawNowIndicator && day == LocalDate.now(zoneId)
 
     val positionedBlocks = remember(segments, allowConcurrentTasks, showTaskCards) {

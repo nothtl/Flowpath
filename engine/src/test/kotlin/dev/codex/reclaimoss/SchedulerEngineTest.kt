@@ -642,6 +642,7 @@ class SchedulerEngineTest {
             remainingMinutes = 120,
             priority = TaskPriority.MEDIUM,
             preferredTimePeriodId = "period-afternoon",
+            overlapPolicy = TaskOverlapPolicy.ALLOW,
         )
         val second = task(
             id = "second-overlap",
@@ -650,6 +651,7 @@ class SchedulerEngineTest {
             remainingMinutes = 120,
             priority = TaskPriority.MEDIUM,
             preferredTimePeriodId = "period-afternoon",
+            overlapPolicy = TaskOverlapPolicy.ALLOW,
         )
 
         val plan = scheduler.rebuildSchedule(
@@ -697,7 +699,7 @@ class SchedulerEngineTest {
             remainingMinutes = 120,
             priority = TaskPriority.MEDIUM,
             preferredTimePeriodId = "period-afternoon",
-            overlapPolicy = TaskOverlapPolicy.INHERIT,
+            overlapPolicy = TaskOverlapPolicy.DISALLOW,
         )
 
         val plan = scheduler.rebuildSchedule(
@@ -1241,7 +1243,7 @@ class SchedulerEngineTest {
         fixedEndAt: Instant? = null,
         continuationParentTaskId: String? = null,
         continuationMode: TaskContinuationMode? = null,
-        overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.INHERIT,
+        overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.DISALLOW,
         allowSplitting: Boolean = true,
     ) = ScheduleTask(
         id = id,

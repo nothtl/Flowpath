@@ -3,6 +3,7 @@ package dev.codex.reclaimoss.data.local
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.migration.Migration
 import androidx.room.OnConflictStrategy
@@ -41,7 +42,7 @@ data class ProjectEntity(
     val archived: Boolean,
 )
 
-@Entity(tableName = "tasks")
+@Entity(tableName = "tasks", indices = [Index("dueAtEpochMillis")])
 data class TaskEntity(
     @PrimaryKey val id: String,
     val recurrenceSeriesId: String?,
@@ -96,7 +97,7 @@ data class TimePeriodEntity(
     val sortOrder: Int,
 )
 
-@Entity(tableName = "reminders")
+@Entity(tableName = "reminders", indices = [Index("dueAtEpochMillis")])
 data class ReminderEntity(
     @PrimaryKey val id: String,
     val title: String,
@@ -124,7 +125,7 @@ data class SchedulingIssueEntity(
     val reason: String,
 )
 
-@Entity(tableName = "schedule_blocks")
+@Entity(tableName = "schedule_blocks", indices = [Index("taskId")])
 data class ScheduleBlockEntity(
     @PrimaryKey val id: String,
     val taskId: String,
@@ -140,6 +141,9 @@ data class ScheduleBlockEntity(
 interface ProjectDao {
     @Query("SELECT * FROM projects ORDER BY archived, name")
     fun observeProjects(): Flow<List<ProjectEntity>>
+
+    @Query("SELECT * FROM projects")
+    suspend fun getAll(): List<ProjectEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(project: ProjectEntity)
@@ -197,6 +201,12 @@ interface ScheduleBlockDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(blocks: List<ScheduleBlockEntity>)
+
+    @androidx.room.Transaction
+    suspend fun replaceFlexibleBlocksForTask(taskId: String, blocks: List<ScheduleBlockEntity>) {
+        deleteFlexiblePendingBlocksForTask(taskId)
+        upsertAll(blocks)
+    }
 
     @Query("DELETE FROM schedule_blocks WHERE taskId = :taskId AND completionState != 'COMPLETED' AND lockState != 'LOCKED'")
     suspend fun deleteFlexiblePendingBlocksForTask(taskId: String)
@@ -378,7 +388,7 @@ class RoomConverters {
         ReminderEntity::class,
         SchedulingIssueEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = false,
 )
 @TypeConverters(RoomConverters::class)
@@ -437,7 +447,7 @@ abstract class OpenReclaimDatabase : RoomDatabase() {
 
         val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("ALTER TABLE tasks ADD COLUMN overlapPolicy TEXT NOT NULL DEFAULT 'INHERIT'")
+                database.execSQL("ALTER TABLE tasks ADD COLUMN overlapPolicy TEXT NOT NULL DEFAULT 'DISALLOW'")
             }
         }
 
@@ -470,6 +480,14 @@ abstract class OpenReclaimDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE tasks ADD COLUMN taskKind TEXT NOT NULL DEFAULT 'NORMAL'")
                 database.execSQL("ALTER TABLE tasks ADD COLUMN notBeforeAtEpochMillis INTEGER")
+            }
+        }
+
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_tasks_dueAt ON tasks(dueAtEpochMillis)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_reminders_dueAt ON reminders(dueAtEpochMillis)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_blocks_taskId ON schedule_blocks(taskId)")
             }
         }
     }

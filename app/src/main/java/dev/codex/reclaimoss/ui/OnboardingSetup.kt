@@ -15,3 +15,12 @@ fun coveredSleepWeekdays(entries: List<SleepOnboardingEntryDraft>): Set<DayOfWee
 
 fun missingSleepWeekdays(entries: List<SleepOnboardingEntryDraft>): Set<DayOfWeek> =
     DayOfWeek.entries.filterNotTo(linkedSetOf()) { it in coveredSleepWeekdays(entries) }
+
+fun unavailableSleepWeekdays(
+    entries: List<SleepOnboardingEntryDraft>,
+    selectedDays: Set<DayOfWeek>,
+    editingIndex: Int,
+): Set<DayOfWeek> {
+    val otherEntries = entries.filterIndexed { index, _ -> index != editingIndex }
+    return otherEntries.flatMapTo(linkedSetOf()) { it.weekdays }
+}

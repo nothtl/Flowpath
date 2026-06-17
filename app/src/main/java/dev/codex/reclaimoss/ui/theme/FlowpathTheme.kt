@@ -36,8 +36,8 @@ private val FlowpathLightColors = lightColorScheme(
     onBackground = Color(0xFF16202D),
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF16202D),
-    surfaceVariant = Color(0xFFE9EEF6),
-    onSurfaceVariant = Color(0xFF607082),
+    surfaceVariant = Color(0xFFD6DDEB),
+    onSurfaceVariant = Color(0xFF3D4858),
     outline = Color(0xFFC7D2E0),
     outlineVariant = Color(0xFFDCE4EF),
 )

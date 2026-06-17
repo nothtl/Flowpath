@@ -1,5 +1,6 @@
 package dev.codex.reclaimoss.data.repository
 
+import dev.codex.reclaimoss.data.local.OpenReclaimDatabase
 import dev.codex.reclaimoss.data.local.ProjectDao
 import dev.codex.reclaimoss.data.local.ProjectEntity
 import dev.codex.reclaimoss.data.local.ReminderDao
@@ -36,8 +37,13 @@ import dev.codex.reclaimoss.domain.model.TimePeriodType
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 data class PlannerSnapshot(
@@ -82,6 +88,7 @@ interface PlannerRepository {
 }
 
 class PlannerRepositoryImpl(
+    private val db: OpenReclaimDatabase,
     private val projectDao: ProjectDao,
     private val timeframeDao: TimeframeDao,
     private val taskDao: TaskDao,
@@ -111,6 +118,9 @@ class PlannerRepositoryImpl(
                 schedulingIssues = values[6] as List<SchedulingIssue>,
             )
         }
+            .flowOn(Dispatchers.Default)
+            .conflate()
+            .distinctUntilChanged()
 
     override suspend fun upsertProject(project: Project) {
         projectDao.upsert(
@@ -165,8 +175,7 @@ class PlannerRepositoryImpl(
     override suspend fun getBlocks(): List<ScheduleBlock> = scheduleBlockDao.getAll().map { it.toDomain() }
 
     override suspend fun replaceFlexibleBlocks(taskId: String, blocks: List<ScheduleBlock>) {
-        scheduleBlockDao.deleteFlexiblePendingBlocksForTask(taskId)
-        scheduleBlockDao.upsertAll(blocks.map { it.toEntity() })
+        scheduleBlockDao.replaceFlexibleBlocksForTask(taskId, blocks.map { it.toEntity() })
     }
 
     override suspend fun updateBlockLock(blockId: String, lockState: BlockLockState) {
@@ -228,6 +237,17 @@ class PlannerRepositoryImpl(
     }
 
     override suspend fun seedDemoDataIfEmpty() {
+        val projects = projectDao.getAll()
+        if (projects.isNotEmpty()) return
+        projectDao.upsert(
+            ProjectEntity(
+                id = "project-default",
+                name = "My Tasks",
+                colorHex = "#4A90D9",
+                defaultPriority = TaskPriority.MEDIUM,
+                archived = false,
+            ),
+        )
     }
 }
 
@@ -399,7 +419,7 @@ private fun SchedulingIssueEntity.toDomain() = SchedulingIssue(
 )
 
 private fun SchedulingIssue.toEntity() = SchedulingIssueEntity(
-    id = taskId,
+    id = java.util.UUID.randomUUID().toString(),
     taskId = taskId,
     type = type,
     unscheduledMinutes = unscheduledMinutes,

@@ -181,7 +181,7 @@ data class TaskDraft(
     val continuationParentTaskId: String? = null,
     val continuationMode: TaskContinuationMode? = null,
     val noGap: Boolean = false,
-    val overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.INHERIT,
+    val overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.DISALLOW,
     val allowSplitting: Boolean = true,
     val deadline: LocalDateTime = LocalDateTime.now().plusDays(1).withHour(17).withMinute(0),
     val schedulingMode: TaskSchedulingMode = TaskSchedulingMode.FLEXIBLE,
@@ -239,7 +239,7 @@ fun ScheduleTask.toFollowUpDraft(zoneId: ZoneId = ZoneId.systemDefault()): TaskD
         hasDeadline = false,
         continuationParentTaskId = null,
         continuationMode = null,
-        overlapPolicy = TaskOverlapPolicy.INHERIT,
+        overlapPolicy = TaskOverlapPolicy.DISALLOW,
         allowSplitting = allowSplitting,
         schedulingMode = TaskSchedulingMode.FLEXIBLE,
         hasWindow = false,
@@ -804,7 +804,10 @@ private fun nextSleepOccurrence(
     zoneId: ZoneId,
     now: LocalDateTime = LocalDateTime.now(zoneId),
 ): SleepOccurrence {
-    require(entry.weekdays.isNotEmpty())
+    if (entry.weekdays.isEmpty()) return SleepOccurrence(
+        startAt = LocalDateTime.now(zoneId).plusDays(1).atZone(zoneId).toInstant(),
+        endAt = LocalDateTime.now(zoneId).plusDays(1).plusHours(8).atZone(zoneId).toInstant(),
+    )
     val nextDate = generateSequence(now.toLocalDate()) { it.plusDays(1) }
         .first { it.dayOfWeek in entry.weekdays }
     var startAt = LocalDateTime.of(nextDate, entry.windowStart)

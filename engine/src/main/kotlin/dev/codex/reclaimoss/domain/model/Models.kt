@@ -91,7 +91,6 @@ enum class TaskContinuationMode {
 }
 
 enum class TaskOverlapPolicy {
-    INHERIT,
     ALLOW,
     DISALLOW,
 }
@@ -202,7 +201,7 @@ data class ScheduleTask(
     val continuationParentTaskId: String? = null,
     val continuationMode: TaskContinuationMode? = null,
     val noGap: Boolean = false,
-    val overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.INHERIT,
+    val overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.DISALLOW,
     val allowSplitting: Boolean = true,
     val schedulingMode: TaskSchedulingMode = TaskSchedulingMode.FLEXIBLE,
     val notBeforeAt: Instant? = null,

@@ -85,6 +85,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
@@ -155,7 +156,13 @@ fun PlannerScreen(
 ) {
     var visibleMonth by rememberSaveable { mutableStateOf(YearMonth.from(selectedDate)) }
     val zoneId = remember { ZoneId.systemDefault() }
-    val today = remember(zoneId) { LocalDate.now(zoneId) }
+    var today by remember(zoneId) { mutableStateOf(LocalDate.now(zoneId)) }
+    LaunchedEffect(zoneId) {
+        while (true) {
+            today = LocalDate.now(zoneId)
+            kotlinx.coroutines.delay(60_000L)
+        }
+    }
     LaunchedEffect(selectedDate) {
         visibleMonth = YearMonth.from(selectedDate)
     }
@@ -396,7 +403,14 @@ fun CalendarCard(
     onNextMonth: () -> Unit,
     onDateSelected: (LocalDate) -> Unit,
 ) {
-    val today = remember { LocalDate.now() }
+    val zoneId = remember { ZoneId.systemDefault() }
+    var today by remember(zoneId) { mutableStateOf(LocalDate.now(zoneId)) }
+    LaunchedEffect(zoneId) {
+        while (true) {
+            today = LocalDate.now(zoneId)
+            kotlinx.coroutines.delay(60_000L)
+        }
+    }
     val dayLabels = remember(weekStart) {
         if (weekStart == WeekStart.MONDAY) {
             listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -441,30 +455,43 @@ fun CalendarCard(
                     Text(dayName, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium)
                 }
             }
+            val density = LocalDensity.current
+            val canvasStrokePx = remember(timeframeStroke) { with(density) { timeframeStroke.toPx() } }
+            val canvasInsetPx = remember(timeframeInset) { with(density) { timeframeInset.toPx() } }
+            val canvasOverhangPx = remember(edgeOverhang) { with(density) { edgeOverhang.toPx() } }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 weeks.forEachIndexed { rowIndex, week ->
+                    var rowWidthPx by remember { mutableStateOf(0f) }
+                    var rowHeightPxVal by remember { mutableStateOf(0f) }
+                    val rowSpecs = remember(rowWidthPx, rowHeightPxVal, week, timeframes, canvasStrokePx, canvasInsetPx, canvasOverhangPx) {
+                        if (rowWidthPx <= 0f || rowHeightPxVal <= 0f) emptyList()
+                        else buildTimeframeRowDrawSpecs(
+                            weeks = listOf(week),
+                            timeframes = timeframes,
+                            cellWidthPx = rowWidthPx / 7f,
+                            rowHeightPx = rowHeightPxVal,
+                            strokeWidthPx = canvasStrokePx,
+                            baseInsetPx = canvasInsetPx,
+                            edgeOverhangPx = canvasOverhangPx,
+                        ).filter { it.rowIndex == 0 }
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(rowHeight),
+                            .height(rowHeight)
+                            .onSizeChanged { size ->
+                                rowWidthPx = size.width.toFloat()
+                                rowHeightPxVal = size.height.toFloat()
+                            },
                     ) {
                         Canvas(modifier = Modifier.matchParentSize()) {
-                            val rowSpecs = buildTimeframeRowDrawSpecs(
-                                weeks = listOf(week),
-                                timeframes = timeframes,
-                                cellWidthPx = size.width / 7f,
-                                rowHeightPx = size.height,
-                                strokeWidthPx = timeframeStroke.toPx(),
-                                baseInsetPx = timeframeInset.toPx(),
-                                edgeOverhangPx = edgeOverhang.toPx(),
-                            ).filter { it.rowIndex == 0 }
                             rowSpecs.forEach { spec ->
                                 drawRoundRect(
                                     color = parseTimeframeColor(spec.colorHex),
                                     topLeft = androidx.compose.ui.geometry.Offset(spec.left, spec.top),
                                     size = androidx.compose.ui.geometry.Size(spec.right - spec.left, spec.bottom - spec.top),
                                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(spec.radius, spec.radius),
-                                    style = Stroke(width = timeframeStroke.toPx()),
+                                    style = Stroke(width = canvasStrokePx),
                                 )
                             }
                         }

@@ -76,7 +76,7 @@ class SchedulerEngine {
         val existingAnchorByTaskId = existingPendingByTaskId
             .mapValues { (_, blocks) -> blocks.minOf { it.startAt } }
         val baseTasksToSchedule = tasks
-            .filter { it.status == TaskStatus.ACTIVE && it.remainingMinutes > 0 }
+            .filter { it.status == TaskStatus.ACTIVE && (it.remainingMinutes > 0 || it.taskKind == TaskKind.BLOCKER) }
             .sortedWith(
                 compareBy<ScheduleTask> {
                     when (it.taskKind) {
@@ -205,6 +205,15 @@ class SchedulerEngine {
             }
             var cursor = firstBlockStart
 
+            // noGap: when false (default), add a break-buffer gap between the
+            // parent's end and this task's start. When true, hug the parent.
+            if (task.continuationParentTaskId != null && !task.noGap &&
+                dependencyStartBoundary != null &&
+                (task.continuationMode == null || task.continuationMode == TaskContinuationMode.AFTER_PARENT_SCHEDULED_END)
+            ) {
+                cursor = cursor.plus(policy.breakBetweenBlocksMinutes.toLong(), ChronoUnit.MINUTES)
+            }
+
             if (existingTaskBlocks.isNotEmpty()) {
                 val occupiedWithoutSelf = partitionBusyWindowsForTask(
                     task = task,
@@ -247,6 +256,63 @@ class SchedulerEngine {
 
             if (cursor == firstBlockStart) {
                 cursor = existingAnchorByTaskId[task.id]?.let { maxInstant(firstBlockStart, it) } ?: firstBlockStart
+            }
+
+            // Blocker FIXED_EXACT tasks reserve their time slot regardless of
+            // remaining work minutes. The fixedStartAt→fixedEndAt window is the
+            // blocked time; any remaining > 0 represents associated work that
+            // will be scheduled around the blocker after the reservation is made.
+            if (task.taskKind == TaskKind.BLOCKER &&
+                task.schedulingMode == TaskSchedulingMode.FIXED_EXACT &&
+                task.fixedStartAt != null && task.fixedEndAt != null
+            ) {
+                val (occupied, _) = partitionBusyWindowsForTask(
+                    task = task,
+                    taskBlocks = pendingBlocksPool.filter { it.taskId != task.id },
+                    hardBusyWindows = hardBusyWindows,
+                    tasksById = allTasksById,
+                    allowConcurrentTasks = policy.allowConcurrentTasks,
+                )
+                val conflictsWithOccupied = occupied.any { it.startAt < task.fixedEndAt && it.endAt > task.fixedStartAt }
+                val withinTimeframe = timeframeStart == null || !task.fixedStartAt.isBefore(timeframeStart)
+                val beforeTimeframeEnd = timeframeEnd == null || !task.fixedEndAt.isAfter(timeframeEnd)
+                val afterRangeStart = !task.fixedStartAt.isBefore(rangeStart)
+                val respectsDependency = dependencyStartBoundary == null || !task.fixedStartAt.isBefore(dependencyStartBoundary)
+                val respectsEndBoundary = dependencyEndBoundary == null || !task.fixedEndAt.isAfter(dependencyEndBoundary)
+
+                if (!conflictsWithOccupied && withinTimeframe && beforeTimeframeEnd && afterRangeStart && respectsDependency && respectsEndBoundary) {
+                    val block = ScheduleBlock(
+                        id = "block-${task.id}-${results.count { it.taskId == task.id } + 1}",
+                        taskId = task.id,
+                        startAt = task.fixedStartAt,
+                        endAt = task.fixedEndAt,
+                        source = BlockSource.AUTO,
+                        lockState = BlockLockState.FLEXIBLE,
+                        completionState = BlockCompletionState.PENDING,
+                        externalCalendarEventId = null,
+                    )
+                    results += block
+                    pendingBlocksPool += block
+                    // If there's associated work (remaining > 0), the fixed-exact
+                    // block doesn't count toward it — the work is separate.
+                    if (remaining == 0) {
+                        continue
+                    }
+                    // remaining > 0: fall through to normal scheduling for the work.
+                    // Cursor starts after the reserved block so work is placed
+                    // after the meeting.
+                    cursor = task.fixedEndAt.plus(
+                        policy.breakBetweenBlocksMinutes.toLong(), ChronoUnit.MINUTES)
+                } else {
+                    unscheduled += task.id
+                    issues += SchedulingIssue(
+                        taskId = task.id,
+                        type = SchedulingIssueType.UNSCHEDULED,
+                        unscheduledMinutes = remaining,
+                        reason = "Blocker conflicts with occupied time or constraints.",
+                    )
+                    continue
+                }
             }
 
             val effectiveAllowSplitting = policy.allowTaskSplitting && task.allowSplitting
@@ -339,8 +405,14 @@ class SchedulerEngine {
             }
         }
 
+        // Preserve pending blocks for tasks that weren't in the scheduling loop
+        // (e.g. tasks with remaining=0 that still have active blocks occupying time).
+        val pendingBlockIdsInResults = results.map { it.id }.toSet()
+        val orphanedPending = pendingBlocksPool.filter { it.id !in pendingBlockIdsInResults }
+        val allBlocks = results + orphanedPending
+
         return SchedulePlan(
-            blocks = coalesceAdjacentTaskBlocks(results).sortedBy { it.startAt },
+            blocks = coalesceAdjacentTaskBlocks(allBlocks).sortedBy { it.startAt },
             unscheduledTaskIds = unscheduled.distinct(),
             issues = issues,
         )
@@ -827,7 +899,14 @@ class SchedulerEngine {
 
         fun visit(task: ScheduleTask) {
             if (task.id in visited) return
-            if (!visiting.add(task.id)) return
+            if (!visiting.add(task.id)) {
+                // Cycle detected: break it by scheduling this task without its
+                // dependency parent. The cycle participant is still added to
+                // ordered so at least one task survives the cycle.
+                visited += task.id
+                ordered += task
+                return
+            }
             val parentId = task.continuationParentTaskId
             if (parentId != null) {
                 tasksById[parentId]?.let(::visit)
@@ -854,7 +933,11 @@ class SchedulerEngine {
                 val latestParentEnd = (existingBlocks.asSequence() + scheduledBlocks.asSequence())
                     .filter { it.taskId == parentId }
                     .maxOfOrNull { it.endAt }
-                latestParentEnd ?: parentTask?.dueAt
+                // If parent has no blocks (was unscheduled or in a broken dependency
+                // cycle), return null — don't constrain child to parent's deadline.
+                // Returning parentTask?.dueAt would create an impossible constraint
+                // when parent and child share the same deadline.
+                latestParentEnd
             }
             TaskContinuationMode.AFTER_PARENT_DUE_AT -> parentTask?.dueAt
             TaskContinuationMode.BEFORE_PARENT_START -> null
@@ -983,7 +1066,6 @@ class SchedulerEngine {
         if (task.taskKind == TaskKind.SLEEP) return false
         if (!allowConcurrentTasks) return false
         return when (task.overlapPolicy) {
-            TaskOverlapPolicy.INHERIT -> true
             TaskOverlapPolicy.ALLOW -> true
             TaskOverlapPolicy.DISALLOW -> false
         }

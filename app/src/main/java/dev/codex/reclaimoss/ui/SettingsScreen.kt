@@ -230,7 +230,7 @@ fun SettingsScreen(
                             )
                         }
                         Text(
-                            section!!.title,
+                            section?.title ?: "Settings",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = settingsPrimaryTextColor(isDarkSettings),

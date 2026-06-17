@@ -113,7 +113,7 @@ class PlannerCoordinator(
         continuationParentTaskId: String? = null,
         continuationMode: TaskContinuationMode? = null,
         noGap: Boolean = false,
-        overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.INHERIT,
+        overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.DISALLOW,
         allowSplitting: Boolean = true,
         recurrenceRule: RecurrenceRule,
         estimatedMinutes: Int,
@@ -169,6 +169,14 @@ class PlannerCoordinator(
             if (addReminder) taskIdsNeedingReminder += taskId
             taskId
         }
+        if (createdTaskIds.isEmpty()) {
+            return TaskCreationResult(
+                taskId = "",
+                scheduled = false,
+                partial = false,
+                reason = "No occurrences could be created for the selected date range.",
+            )
+        }
         val primaryTaskId = createdTaskIds.first()
         val isHighPriority = taskKind == TaskKind.SLEEP || taskKind == TaskKind.BLOCKER
         if (schedulingMode == TaskSchedulingMode.FIXED_EXACT) {
@@ -199,8 +207,9 @@ class PlannerCoordinator(
         taskIdsNeedingReminder.forEach { createReminderForTask(it) }
         val result = taskResultFor(primaryTaskId, allowSplitting)
         val failedToFullySchedule = !result.scheduled
-        if (failedToFullySchedule && recurrenceRule.type == RecurrenceType.NONE) {
-            deleteTask(primaryTaskId)
+        if (failedToFullySchedule) {
+            // Clean up all occurrences that failed to schedule
+            createdTaskIds.forEach { deleteTaskArtifacts(it) }
         }
         return result
     }
@@ -218,7 +227,7 @@ class PlannerCoordinator(
         continuationParentTaskId: String? = null,
         continuationMode: TaskContinuationMode? = null,
         noGap: Boolean = false,
-        overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.INHERIT,
+        overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.DISALLOW,
         allowSplitting: Boolean = true,
         recurrenceRule: RecurrenceRule,
         estimatedMinutes: Int,
@@ -425,7 +434,7 @@ class PlannerCoordinator(
         continuationParentTaskId: String? = null,
         continuationMode: TaskContinuationMode? = null,
         noGap: Boolean = false,
-        overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.INHERIT,
+        overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.DISALLOW,
         allowSplitting: Boolean = true,
         recurrenceRule: RecurrenceRule,
         estimatedMinutes: Int,
@@ -445,7 +454,7 @@ class PlannerCoordinator(
             currentTaskId = taskId,
         )
         val originalPendingBlocks = repository.getBlocks()
-            .filter { it.taskId == taskId && it.completionState != BlockCompletionState.COMPLETED }
+            .filter { it.taskId == taskId }
         val originalIssues = repository.getSchedulingIssues().filter { it.taskId == taskId }
         val updatedTask = existingTask.copy(
             title = title,
@@ -501,7 +510,7 @@ class PlannerCoordinator(
         continuationParentTaskId: String? = null,
         continuationMode: TaskContinuationMode? = null,
         noGap: Boolean = false,
-        overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.INHERIT,
+        overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.DISALLOW,
         allowSplitting: Boolean = true,
         recurrenceRule: RecurrenceRule,
         estimatedMinutes: Int,
@@ -733,12 +742,10 @@ class PlannerCoordinator(
     }
 
     suspend fun upsertTimePeriod(period: TimePeriod) {
-        repository.clearLegacyDailyFlowData()
         rebuildSchedule()
     }
 
     suspend fun deleteTimePeriod(periodId: String) {
-        repository.clearLegacyDailyFlowData()
         rebuildSchedule()
     }
 
@@ -1574,9 +1581,9 @@ class PlannerCoordinator(
         task: ScheduleTask,
         allowConcurrentTasks: Boolean,
     ): Boolean {
+        if (task.taskKind == TaskKind.SLEEP) return false
         if (!allowConcurrentTasks) return false
         return when (task.overlapPolicy) {
-            TaskOverlapPolicy.INHERIT -> true
             TaskOverlapPolicy.ALLOW -> true
             TaskOverlapPolicy.DISALLOW -> false
         }
@@ -1593,8 +1600,7 @@ class PlannerCoordinator(
         currentTaskId: String? = null,
     ) {
         if (continuationParentTaskId == null) return
-        require(continuationParentTaskId != currentTaskId) { "A task cannot continue after itself." }
-        val parentExists = repository.getTasks().any { it.id == continuationParentTaskId }
-        require(parentExists) { "The selected parent task no longer exists." }
+        if (continuationParentTaskId == currentTaskId) return
+        if (!repository.getTasks().any { it.id == continuationParentTaskId }) return
     }
 }

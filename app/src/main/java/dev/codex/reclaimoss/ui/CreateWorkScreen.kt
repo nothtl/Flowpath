@@ -247,37 +247,45 @@ fun CreateWorkScreen(
                 )
             },
             restore = { saved ->
-                TaskDraft(
-                    title = saved[0] as String,
-                    description = saved[1] as String,
-                    priority = TaskPriority.valueOf(saved[2] as String),
-                    preferredTimePeriodId = (saved[3] as String).ifBlank { null },
-                    timeframeId = (saved[4] as String).ifBlank { null },
-                    hasDeadline = saved[5] as Boolean,
-                    continuationParentTaskId = (saved[6] as String).ifBlank { null },
-                    continuationMode = (saved[7] as String).ifBlank { null }?.let(TaskContinuationMode::valueOf),
-                    noGap = (saved[8] as String).toBooleanStrictOrNull() ?: false,
-                    overlapPolicy = TaskOverlapPolicy.valueOf(saved[9] as String),
-                    allowSplitting = saved[10] as Boolean,
-                    deadline = LocalDateTime.parse(saved[11] as String),
-                    schedulingMode = TaskSchedulingMode.valueOf(saved[12] as String),
-                    hasWindow = saved[13] as Boolean,
-                    startDate = (saved[14] as String).ifBlank { null }?.let(LocalDate::parse),
-                    fixedDate = LocalDate.parse(saved[15] as String),
-                    fixedStartAt = LocalDateTime.parse(saved[16] as String),
-                    fixedEndAt = LocalDateTime.parse(saved[17] as String),
-                    repeatsForever = saved[18] as Boolean,
-                    estimatedMinutes = saved[19] as Int,
-                    addReminder = saved[20] as Boolean,
-                    recurrenceType = RecurrenceType.valueOf(saved[21] as String),
-                    recurrenceInterval = saved[22] as Int,
-                    recurrenceDays = (saved[23] as String)
-                        .takeIf { it.isNotBlank() }
-                        ?.split(",")
-                        ?.map { DayOfWeek.valueOf(it) }
-                        ?.toSet()
-                        ?: emptySet(),
-                )
+                if (saved.size != 24) {
+                    TaskDraft()
+                } else {
+                    try {
+                        TaskDraft(
+                            title = saved[0] as String,
+                            description = saved[1] as String,
+                            priority = TaskPriority.valueOf(saved[2] as String),
+                            preferredTimePeriodId = (saved[3] as String).ifBlank { null },
+                            timeframeId = (saved[4] as String).ifBlank { null },
+                            hasDeadline = saved[5] as Boolean,
+                            continuationParentTaskId = (saved[6] as String).ifBlank { null },
+                            continuationMode = (saved[7] as String).ifBlank { null }?.let(TaskContinuationMode::valueOf),
+                            noGap = (saved[8] as String).toBooleanStrictOrNull() ?: false,
+                            overlapPolicy = TaskOverlapPolicy.valueOf(saved[9] as String),
+                            allowSplitting = saved[10] as Boolean,
+                            deadline = LocalDateTime.parse(saved[11] as String),
+                            schedulingMode = TaskSchedulingMode.valueOf(saved[12] as String),
+                            hasWindow = saved[13] as Boolean,
+                            startDate = (saved[14] as String).ifBlank { null }?.let(LocalDate::parse),
+                            fixedDate = LocalDate.parse(saved[15] as String),
+                            fixedStartAt = LocalDateTime.parse(saved[16] as String),
+                            fixedEndAt = LocalDateTime.parse(saved[17] as String),
+                            repeatsForever = saved[18] as Boolean,
+                            estimatedMinutes = saved[19] as Int,
+                            addReminder = saved[20] as Boolean,
+                            recurrenceType = RecurrenceType.valueOf(saved[21] as String),
+                            recurrenceInterval = saved[22] as Int,
+                            recurrenceDays = (saved[23] as String)
+                                .takeIf { it.isNotBlank() }
+                                ?.split(",")
+                                ?.map { DayOfWeek.valueOf(it) }
+                                ?.toSet()
+                                ?: emptySet(),
+                        )
+                    } catch (_: Exception) {
+                        TaskDraft()
+                    }
+                }
             },
         ),
     ) {
@@ -344,6 +352,12 @@ fun CreateWorkScreen(
     LaunchedEffect(tutorialStep, showTaskTutorial) {
         if (showTaskTutorial && tutorialStep == 1) {
             showAdvancedOptions = true
+        }
+    }
+    // Auto-scroll to show expanded "More options" content
+    LaunchedEffect(showAdvancedOptions) {
+        if (showAdvancedOptions) {
+            listState.animateScrollToItem(1)
         }
     }
     var showWindowSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
@@ -611,13 +625,24 @@ fun CreateWorkScreen(
                 }
 
                 // Warning when overwriting existing sleep
-                val sleepOverlapWarning = when (taskDraft.recurrenceType) {
-                    RecurrenceType.DAILY -> if (existingSleepTasks.isNotEmpty()) {
-                        "Sleep is already scheduled. Saving will replace it for all days."
-                    } else null
+                val sleepOverlapWarning = if (existingSleepTasks.isEmpty()) {
+                    null
+                } else when (taskDraft.recurrenceType) {
+                    RecurrenceType.DAILY -> {
+                        val coveredDays = existingSleepTasks
+                            .filter { it.recurrenceRule.type == RecurrenceType.WEEKLY || it.recurrenceRule.type == RecurrenceType.DAILY }
+                            .flatMap { it.recurrenceRule.daysOfWeek }.toSet()
+                        if (coveredDays.isNotEmpty()) {
+                            val dayNames = coveredDays.sortedBy { it.value }
+                                .joinToString(", ") { it.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault()) }
+                            "Sleep already set for $dayNames. Saving will replace those days."
+                        } else {
+                            "Sleep is already scheduled. Saving will replace it for all days."
+                        }
+                    }
                     RecurrenceType.WEEKLY -> {
                         val overlappingDays = taskDraft.recurrenceDays.filter { day ->
-                            existingSleepTasks.any { day in it.recurrenceRule.daysOfWeek }
+                            existingSleepTasks.any { it.recurrenceRule.type == RecurrenceType.WEEKLY && day in it.recurrenceRule.daysOfWeek }
                         }.toSet()
                         if (overlappingDays.isNotEmpty()) {
                             val dayNames = overlappingDays.sortedBy { it.value }
@@ -736,16 +761,17 @@ fun CreateWorkScreen(
                 }
             } else {
                 item {
-                    Box(
-                        modifier = if (showTutorial && showTaskTutorial) Modifier.onGloballyPositioned { coords ->
-                            val pos = coords.positionInRoot(); val sz = coords.size
-                            moreOptionsBounds = Rect(pos, Size(sz.width.toFloat(), sz.height.toFloat()))
-                        } else Modifier,
-                    ) {
+                    Box {
                         CreateFormCard {
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .then(
+                                        if (showTutorial && showTaskTutorial) Modifier.onGloballyPositioned { coords ->
+                                            val pos = coords.positionInRoot(); val sz = coords.size
+                                            moreOptionsBounds = Rect(pos, Size(sz.width.toFloat(), sz.height.toFloat()))
+                                        } else Modifier
+                                    )
                                     .clip(RoundedCornerShape(14.dp))
                                     .clickable { showAdvancedOptions = !showAdvancedOptions },
                             shape = RoundedCornerShape(14.dp),
@@ -1728,7 +1754,6 @@ fun TaskRulesEditor(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         listOf(
-            TaskOverlapPolicy.INHERIT to "Inherit",
             TaskOverlapPolicy.ALLOW to "Allow",
             TaskOverlapPolicy.DISALLOW to "No overlap",
         ).forEach { (policy, label) ->
@@ -2596,7 +2621,7 @@ private fun <T> DependencyDropdown(
                     Text(
                         value,
                         style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -3028,12 +3053,7 @@ fun durationFromWheelSelection(
     return rawMinutes.coerceIn(minMinutes, maxMinutes.coerceAtLeast(minMinutes))
 }
 
-private fun TaskDraft.resolvedOverlapPolicy(allowConcurrentTasks: Boolean): TaskDraft =
-    if (overlapPolicy == TaskOverlapPolicy.INHERIT) {
-        copy(overlapPolicy = if (allowConcurrentTasks) TaskOverlapPolicy.ALLOW else TaskOverlapPolicy.DISALLOW)
-    } else {
-        this
-    }
+private fun TaskDraft.resolvedOverlapPolicy(allowConcurrentTasks: Boolean): TaskDraft = this
 
 private fun TaskSchedulingMode.labelForCreate(): String =
     when (this) {

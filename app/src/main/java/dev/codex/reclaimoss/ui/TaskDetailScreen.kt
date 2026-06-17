@@ -292,10 +292,11 @@ fun TaskDetailScreen(
                         onClick = {
                             firstBlock?.let { onDone(it) }
                         },
+                        enabled = firstBlock != null,
                         modifier = Modifier.weight(1f).height(56.dp),
                         shape = RoundedCornerShape(999.dp),
                     ) {
-                        Text("Done")
+                        Text(if (firstBlock != null) "Done" else "Not scheduled")
                     }
                     Box(modifier = Modifier.weight(1f)) {
                         OutlinedButton(

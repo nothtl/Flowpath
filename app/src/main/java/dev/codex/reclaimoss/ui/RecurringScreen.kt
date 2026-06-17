@@ -155,7 +155,7 @@ fun RecurringScreen(
                     it.status == TaskStatus.ACTIVE
             }
             .groupBy { it.recurrenceSeriesId ?: it.id }
-            .map { (_, tasks) -> tasks.minByOrNull { it.dueAt }!! }
+            .mapNotNull { (_, tasks) -> tasks.minByOrNull { it.dueAt } }
             .sortedBy { it.dueAt }
     }
 

@@ -83,6 +83,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
@@ -150,6 +151,7 @@ fun OpenReclaimApp(appGraph: AppGraph) {
         },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val latestState by rememberUpdatedState(state)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.Tasks) }
@@ -370,6 +372,10 @@ fun OpenReclaimApp(appGraph: AppGraph) {
                                 else -> "Task scheduled"
                             },
                         )
+                        } catch (e: Exception) {
+                            isSaving = false
+                            snackbarHostState.showLatestSnackbar("Something went wrong. Please try again.")
+                            return@launch
                         } finally {
                             isSaving = false
                         }
@@ -629,7 +635,7 @@ fun OpenReclaimApp(appGraph: AppGraph) {
                     },
                     onDone = { block ->
                         scope.launch {
-                            viewModel.completeBlock(block, state.snapshot.tasks)
+                            viewModel.completeBlock(block, latestState.snapshot.tasks)
                             selectedTaskId = null
                             snackbarHostState.showLatestSnackbar("Block done")
                         }
