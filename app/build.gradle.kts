@@ -13,8 +13,8 @@ android {
         applicationId = "dev.codex.reclaimoss"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.6.0"
+        versionCode = 14
+        versionName = "0.6.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
