@@ -709,6 +709,26 @@ fun CreateWorkScreen(
                                             },
                                             onClick = { showTimeWindowSheet = true },
                                         )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text("Any date", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                            Switch(
+                                                checked = !taskDraft.hasWindow,
+                                                onCheckedChange = { anyDate ->
+                                                    taskDraft = taskDraft.copy(hasWindow = !anyDate)
+                                                },
+                                            )
+                                        }
+                                        if (taskDraft.hasWindow) {
+                                            SettingsSummaryRow(
+                                                title = "Date",
+                                                summary = taskDraft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
+                                                onClick = { showFirstOccurrenceSheet = true },
+                                            )
+                                        }
                                     }
                                     if (taskDraft.schedulingMode == TaskSchedulingMode.FIXED_DAY) {
                                         SettingsSummaryRow(
