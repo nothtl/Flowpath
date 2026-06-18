@@ -3248,29 +3248,6 @@ fun windowTimesFromSliderRange(
     }
 }
 
-fun sliderTimesFromRange(
-    startMinutes: Float,
-    endMinutes: Float,
-): Pair<LocalTime, LocalTime> {
-    val snappedStart = snapToStepForCreate(startMinutes.roundToInt().coerceIn(0, 24 * 60), 15).coerceIn(0, 24 * 60)
-    val snappedEnd = snapToStepForCreate(endMinutes.roundToInt().coerceIn(0, 24 * 60), 15).coerceIn(0, 24 * 60)
-    return sliderMinutesToLocalTime(snappedStart) to sliderMinutesToLocalTime(snappedEnd)
-}
-
-private fun TaskDraft.windowDraftFromSlider(
-    startMinutes: Float,
-    endMinutes: Float,
-    overnight: Boolean,
-): TaskDraft {
-    val snappedStart = startMinutes.roundToInt().coerceIn(0, 24 * 60)
-    val snappedEnd = endMinutes.roundToInt().coerceIn(0, 24 * 60)
-    return withWindowTimes(
-        startTime = sliderMinutesToLocalTime(snappedStart),
-        endTime = sliderMinutesToLocalTime(snappedEnd),
-        endsNextDay = overnight,
-    )
-}
-
 private fun TaskDraft.withWindowTimes(
     startTime: LocalTime,
     endTime: LocalTime,

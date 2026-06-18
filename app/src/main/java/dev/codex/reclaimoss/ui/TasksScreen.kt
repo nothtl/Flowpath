@@ -1329,6 +1329,16 @@ private fun ExpandedContinuousTimeline(
                         .zIndex(40f),
                 )
             }
+
+            ExpandedTimelineNowIndicator(
+                today = today,
+                zoneId = zoneId,
+                hourHeight = hourHeight,
+                dayHeightPx = dayHeightPx,
+                safeScrollPx = safeScrollPx,
+                lineStart = railStripWidth + TaskTimelineRailGap,
+                viewportHeightPx = viewportHeightPx,
+            )
         }
     }
 }
