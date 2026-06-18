@@ -79,13 +79,13 @@ enum class TutorialStep(val stepNumber: Int) {
     val description: String
         @Composable get() = when (this) {
             DURATION -> "How many hours do you usually sleep? Adjust the wheel below to match your typical night."
-            DAYS -> "Tap the days you want this sleep schedule to cover. You can add different sleep times for different days later."
-            WINDOW -> "Drag the slider handles to set the earliest bedtime and latest wake-up time. Your sleep will be scheduled somewhere inside this range."
-            SAVE -> "Tap \"Save sleep\" to create your sleep schedule. Repeat for each day of the week."
+            DAYS -> "Tap \"Repeat\" in the accordion to pick the days and recurrence pattern. Choose Weekly to select specific days of the week."
+            WINDOW -> "Tap \"Sleep window\" in the accordion to set your earliest bedtime and latest wake-up time. Your sleep fits somewhere inside this range."
+            SAVE -> "Tap Save to create your sleep schedule. You can add more sleep schedules for other day patterns later."
             MISSING_DAYS -> "Some days still need a sleep schedule. Tap the unselected days above to set them up."
             TASK_NAME -> "Give your task a name and set how long it takes. Flowpath automatically schedules tasks around your sleep and other events."
-            TASK_OPTIONS -> "Expand Schedule & Repeat to set the first occurrence date, time mode, and how the task repeats. Set a deadline if needed."
-            TASK_RULES -> "Expand Rules to configure overlap policy, splitting, dependencies, and reminders. The defaults work for most tasks."
+            TASK_OPTIONS -> "Tap any row in Schedule & Repeat to open its popup. Set placed-after date, time mode, repeat pattern, and deadline."
+            TASK_RULES -> "Tap Priority or Overlap to change via popup. Toggle splitting and reminder inline. Defaults work for most tasks."
             TASK_SAVE -> "Tap Save Task. Flowpath finds the best available time in your schedule and fits the task in."
         }
 }
