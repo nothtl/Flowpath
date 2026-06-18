@@ -581,7 +581,8 @@ fun CreateWorkScreen(
                                     )
                                 }
                             }
-                            // Weekday toggles — this is what the tutorial cutout targets
+                            // Weekday toggles — only shown for weekly recurrence
+                            if (taskDraft.recurrenceType == RecurrenceType.WEEKLY) {
                             Box(
                                 modifier = if (showTutorial) Modifier
                                     .padding(top = 12.dp)
@@ -619,6 +620,7 @@ fun CreateWorkScreen(
                                         }
                                     }
                                 }
+                            }
                             }
                         }
                     } // close Box

@@ -225,6 +225,8 @@ fun OpenReclaimApp(appGraph: AppGraph) {
         editSourceTaskId = null
         rescheduleSourceTaskId = null
         createTaskDraftOverride = null
+        createInSleepMode = false
+        showTaskTutorial = false
     }
     BackHandler(enabled = showingReminderCreate) {
         showingReminderCreate = false
