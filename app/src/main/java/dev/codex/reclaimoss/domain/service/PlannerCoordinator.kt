@@ -29,6 +29,7 @@ import dev.codex.reclaimoss.domain.model.TimeWindow
 import dev.codex.reclaimoss.domain.model.WorkHoursDay
 import dev.codex.reclaimoss.domain.model.WorkHoursProfile
 import java.time.Clock
+import java.time.Duration
 import dev.codex.reclaimoss.domain.scheduling.ScheduleRebuildReason
 import dev.codex.reclaimoss.domain.scheduling.SchedulerEngine
 import dev.codex.reclaimoss.settings.AppSettings
@@ -127,6 +128,9 @@ class PlannerCoordinator(
         requireValidContinuationParent(continuationParentTaskId)
         val isRecurringSeries = recurrenceRule.type != RecurrenceType.NONE
         val seriesId = if (isRecurringSeries) newId("series") else null
+        // firstOccurrence anchors the recurrence series date pattern.
+        // The first occurrence's actual dueAt stays as the deadline (dueAt param);
+        // firstOccurrence only shifts future occurrences by the same date offset.
         val occurrences = materializedOccurrences(
             initialDueAt = firstOccurrence ?: dueAt,
             recurrenceRule = recurrenceRule,
@@ -134,9 +138,15 @@ class PlannerCoordinator(
             fixedStartAt = fixedStartAt,
             fixedEndAt = fixedEndAt,
         )
+        val dayOffset = if (firstOccurrence != null && !isRecurringSeries) {
+            Duration.between(firstOccurrence, dueAt).toDays().toInt()
+        } else 0
         val taskIdsNeedingReminder = mutableListOf<String>()
         val createdTaskIds = occurrences.mapIndexed { index, occurrence ->
             val taskId = "${newId("task")}-$index"
+            val occDueAt = if (index == 0 && !isRecurringSeries) dueAt else occurrence.dueAt
+            val occFixedStart = occurrence.fixedStartAt
+            val occFixedEnd = occurrence.fixedEndAt
             repository.upsertTask(
                 ScheduleTask(
                     id = taskId,
@@ -157,9 +167,9 @@ class PlannerCoordinator(
                     allowSplitting = allowSplitting,
                     schedulingMode = schedulingMode,
                     notBeforeAt = notBeforeAt,
-                    fixedStartAt = occurrence.fixedStartAt,
-                    fixedEndAt = occurrence.fixedEndAt,
-                    dueAt = occurrence.dueAt,
+                    fixedStartAt = occFixedStart,
+                    fixedEndAt = occFixedEnd,
+                    dueAt = occDueAt,
                     estimatedMinutes = estimatedMinutes,
                     remainingMinutes = estimatedMinutes,
                     recurrenceRule = recurrenceRule,

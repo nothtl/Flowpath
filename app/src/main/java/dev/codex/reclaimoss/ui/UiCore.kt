@@ -183,7 +183,7 @@ data class TaskDraft(
     val noGap: Boolean = false,
     val overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.DISALLOW,
     val allowSplitting: Boolean = true,
-    val firstOccurrence: LocalDateTime = LocalDateTime.now().plusDays(1).withHour(9).withMinute(0),
+    val firstOccurrence: LocalDateTime = LocalDateTime.now().plusDays(1),
     val deadline: LocalDateTime = LocalDateTime.now().plusDays(1).withHour(17).withMinute(0),
     val schedulingMode: TaskSchedulingMode = TaskSchedulingMode.FLEXIBLE,
     val hasWindow: Boolean = false,
