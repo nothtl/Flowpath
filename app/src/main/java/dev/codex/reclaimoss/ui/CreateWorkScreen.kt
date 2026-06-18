@@ -336,7 +336,7 @@ fun CreateWorkScreen(
         }
         else -> when (tutorialStep) {
             0 -> durationSectionBounds
-            1 -> daysSectionBounds
+            1 -> scheduleRepeatBounds  // Days are inside Schedule & Repeat accordion
             2 -> windowSectionBounds
             3 -> saveBarBounds
             else -> null
@@ -349,17 +349,15 @@ fun CreateWorkScreen(
         when (tutorialStep) {
             0 -> listState.animateScrollToItem(0)
             1 -> listState.animateScrollToItem(1)
-            2 -> listState.animateScrollToItem(2)
+            2 -> listState.animateScrollToItem(3)  // Window is item 3 (after overlap warning)
             3 -> {} // save bar is always visible
         }
     }
     // Auto-expand sections when tutorial highlights them
     LaunchedEffect(tutorialStep, showTaskTutorial) {
-        if (showTaskTutorial) {
-            when (tutorialStep) {
-                1 -> showScheduleRepeat = true
-                2 -> showAdvancedOptions = true  // Rules
-            }
+        when (tutorialStep) {
+            1 -> showScheduleRepeat = true
+            else -> {}
         }
     }
     // Auto-scroll to show expanded content
