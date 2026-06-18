@@ -344,7 +344,7 @@ fun CreateWorkScreen(
         else -> when (tutorialStep) {
             0 -> durationSectionBounds
             1 -> scheduleRepeatBounds  // Days are inside Schedule & Repeat accordion
-            2 -> windowSectionBounds
+            2 -> scheduleRepeatBounds  // Window is now inside Schedule & Repeat accordion
             3 -> saveBarBounds
             else -> null
         }
@@ -356,7 +356,7 @@ fun CreateWorkScreen(
         when (tutorialStep) {
             0 -> listState.animateScrollToItem(0)
             1 -> listState.animateScrollToItem(1)
-            2 -> listState.animateScrollToItem(3)  // Window is item 3 (after overlap warning)
+            2 -> listState.animateScrollToItem(1)  // Window is now inside Schedule & Repeat accordion
             3 -> {} // save bar is always visible
         }
     }
@@ -550,30 +550,27 @@ fun CreateWorkScreen(
                                 enter = expandVertically(),
                                 exit = shrinkVertically(),
                             ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 
-                                    // First occurrence
-                                    DateTimeSection(
-                                        title = "First occurrence",
-                                        dateTime = taskDraft.firstOccurrence,
-                                        onDateTimeChanged = { taskDraft = taskDraft.copy(firstOccurrence = it) },
-                                        context = context,
+                                    SettingsSummaryRow(
+                                        title = "Placed after",
+                                        summary = taskDraft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")),
+                                        onClick = { showFirstOccurrenceSheet = true },
                                     )
-
-                                    // Repeat
-                                    RecurrenceSection(
-                                        recurrenceType = taskDraft.recurrenceType,
-                                        recurrenceDays = taskDraft.recurrenceDays,
-                                        onTypeChanged = { type ->
-                                            taskDraft = taskDraft.copy(
-                                                recurrenceType = type,
-                                                recurrenceDays = if (type == RecurrenceType.WEEKLY) taskDraft.recurrenceDays else emptySet(),
-                                            )
+                                    SettingsSummaryRow(
+                                        title = "Sleep window",
+                                        summary = buildString {
+                                            append(taskDraft.fixedStartAt.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a")))
+                                            append(" - ")
+                                            append(taskDraft.fixedEndAt.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a")))
                                         },
-                                        recurrenceInterval = taskDraft.recurrenceInterval,
-                                        onIntervalChanged = { taskDraft = taskDraft.copy(recurrenceInterval = it) },
-                                        onDayToggle = { taskDraft = taskDraft.copy(recurrenceDays = taskDraft.recurrenceDays.toggleForCreate(it)) },
+                                        onClick = { showTimeWindowSheet = true },
+                                    )
+                                    SettingsSummaryRow(
+                                        title = "Repeat",
+                                        summary = taskRepeatSummary(taskDraft),
+                                        onClick = { showRepeatSheet = true },
                                     )
                                 }
                             }
@@ -652,70 +649,6 @@ fun CreateWorkScreen(
                     }
                 }
 
-                // Repeat deadline controls
-                item {
-                    CreateFormCard {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Repeats forever",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Switch(
-                                checked = taskDraft.repeatsForever,
-                                onCheckedChange = { taskDraft = taskDraft.copy(repeatsForever = it) },
-                            )
-                        }
-                        if (!taskDraft.repeatsForever) {
-                            Spacer(Modifier.height(12.dp))
-                            DateTimeSection(
-                                title = "Repeat until",
-                                dateTime = taskDraft.deadline,
-                                onDateTimeChanged = { taskDraft = taskDraft.copy(deadline = it) },
-                                context = context,
-                            )
-                        }
-                    }
-                }
-
-                // Inline daily window configurator
-                item {
-                    Box(
-                        modifier = if (showTutorial) Modifier.onGloballyPositioned { coords ->
-                            val pos = coords.positionInRoot(); val sz = coords.size
-                            windowSectionBounds = Rect(pos, Size(sz.width.toFloat(), sz.height.toFloat()))
-                        } else Modifier,
-                    ) {
-                        CreateFormCard {
-                            DailyWindowConfigurator(
-                            hasWindow = taskDraft.hasWindow,
-                            canDisable = false,
-                            startTime = taskDraft.fixedStartAt.toLocalTime(),
-                            endTime = taskDraft.fixedEndAt.toLocalTime(),
-                            endsNextDay = taskDraft.fixedEndAt.toLocalTime() <= taskDraft.fixedStartAt.toLocalTime(),
-                            minimumWindowMinutes = taskDraft.estimatedMinutes.coerceAtLeast(240),
-                            onWindowEnabledChanged = {},
-                            onWindowChanged = { start, end, overnight ->
-                                val today = java.time.LocalDate.now()
-                                val startDate = today
-                                val endDate = if (overnight) today.plusDays(1) else today
-                                val newFixedStart = java.time.LocalDateTime.of(startDate, start)
-                                val newFixedEnd = java.time.LocalDateTime.of(endDate, end)
-                                taskDraft = taskDraft.copy(
-                                    hasWindow = true,
-                                    fixedStartAt = newFixedStart,
-                                    fixedEndAt = newFixedEnd,
-                                )
-                            },
-                            context = context,
-                        )
-                    }
-                    } // close Box
-                }
             } else {
                 item {
                     Box {
@@ -757,7 +690,7 @@ fun CreateWorkScreen(
 
                                     // Summary rows — each opens a bottom sheet
                                     SettingsSummaryRow(
-                                        title = "First occurrence",
+                                        title = "Placed after",
                                         summary = taskDraft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")),
                                         onClick = { showFirstOccurrenceSheet = true },
                                     )
@@ -915,7 +848,7 @@ fun CreateWorkScreen(
     if (showFirstOccurrenceSheet) {
         ModalBottomSheet(onDismissRequest = { showFirstOccurrenceSheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("First occurrence", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Placed after", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 DateTimeSection(
                     title = "",
                     dateTime = taskDraft.firstOccurrence,
@@ -958,19 +891,19 @@ fun CreateWorkScreen(
         ModalBottomSheet(onDismissRequest = { showTimeWindowSheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (taskDraft.schedulingMode == TaskSchedulingMode.FLEXIBLE_WINDOW) {
-                    Text("Time window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(if (sleepMode) "Sleep window" else "Time window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     DailyWindowConfigurator(
                         hasWindow = true, canDisable = false,
                         startTime = taskDraft.fixedStartAt.toLocalTime(),
                         endTime = taskDraft.fixedEndAt.toLocalTime(),
                         endsNextDay = taskDraft.fixedEndAt.toLocalTime() <= taskDraft.fixedStartAt.toLocalTime(),
-                        minimumWindowMinutes = taskDraft.estimatedMinutes,
+                        minimumWindowMinutes = if (sleepMode) taskDraft.estimatedMinutes.coerceAtLeast(240) else taskDraft.estimatedMinutes,
                         onWindowEnabledChanged = {},
                         onWindowChanged = { start, end, overnight ->
-                            val startDate = taskDraft.firstOccurrence.toLocalDate()
-                            val endDate = if (overnight) startDate.plusDays(1) else startDate
+                            val anchorDate = if (sleepMode) java.time.LocalDate.now() else taskDraft.firstOccurrence.toLocalDate()
+                            val endDate = if (overnight) anchorDate.plusDays(1) else anchorDate
                             taskDraft = taskDraft.copy(
-                                fixedStartAt = LocalDateTime.of(startDate, start),
+                                fixedStartAt = LocalDateTime.of(anchorDate, start),
                                 fixedEndAt = LocalDateTime.of(endDate, end),
                             )
                         },
