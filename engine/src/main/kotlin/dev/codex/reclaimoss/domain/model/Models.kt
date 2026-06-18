@@ -201,7 +201,7 @@ data class ScheduleTask(
     val continuationParentTaskId: String? = null,
     val continuationMode: TaskContinuationMode? = null,
     val noGap: Boolean = false,
-    val overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.DISALLOW,
+    val overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.ALLOW,
     val allowSplitting: Boolean = true,
     val schedulingMode: TaskSchedulingMode = TaskSchedulingMode.FLEXIBLE,
     val notBeforeAt: Instant? = null,
