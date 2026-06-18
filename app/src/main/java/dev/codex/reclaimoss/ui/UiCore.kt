@@ -183,6 +183,7 @@ data class TaskDraft(
     val noGap: Boolean = false,
     val overlapPolicy: TaskOverlapPolicy = TaskOverlapPolicy.DISALLOW,
     val allowSplitting: Boolean = true,
+    val firstOccurrence: LocalDateTime = LocalDateTime.now().plusDays(1).withHour(9).withMinute(0),
     val deadline: LocalDateTime = LocalDateTime.now().plusDays(1).withHour(17).withMinute(0),
     val schedulingMode: TaskSchedulingMode = TaskSchedulingMode.FLEXIBLE,
     val hasWindow: Boolean = false,
@@ -349,6 +350,7 @@ class PlannerViewModel(
             schedulingMode = draft.schedulingMode,
             fixedStartAt = draft.schedulingStartInstantOrNull(),
             fixedEndAt = draft.fixedEndAtInstantOrNull(),
+            firstOccurrence = draft.firstOccurrence.atZone(ZoneId.systemDefault()).toInstant(),
         )
     }
 
@@ -381,14 +383,13 @@ class PlannerViewModel(
                 notBeforeAt = null,
                 fixedStartAt = occurrence.startAt,
                 fixedEndAt = occurrence.endAt,
+                firstOccurrence = occurrence.startAt,
             )
         }
     }
 
     suspend fun addSleepFromDraft(draft: TaskDraft): List<TaskCreationResult>? {
         val zoneId = ZoneId.systemDefault()
-        val weekdays = draft.recurrenceDays
-        if (weekdays.isEmpty()) return null
         val results = mutableListOf<TaskCreationResult>()
         val draftStart = draft.schedulingStartInstantOrNull()
         val draftEnd = draft.fixedEndAtInstantOrNull()
@@ -397,42 +398,97 @@ class PlannerViewModel(
         val windowEndTime = draftEnd.atZone(zoneId).toLocalTime()
         val windowOvernight = !draftEnd.isAfter(draftStart) || windowEndTime <= windowStartTime
         val duration = draft.estimatedMinutes.coerceAtLeast(240)
-        weekdays.forEach { day ->
-            // Compute the next occurrence date, then build window around it
-            val occurrenceDate = nextSleepOccurrenceDate(day, zoneId)
-            val windowStartInstant = java.time.LocalDateTime.of(occurrenceDate, windowStartTime).atZone(zoneId).toInstant()
-            val windowEndInstant = java.time.LocalDateTime.of(
-                if (windowOvernight) occurrenceDate.plusDays(1) else occurrenceDate,
-                windowEndTime,
-            ).atZone(zoneId).toInstant()
-            val result = coordinator.createTask(
-                title = draft.title.ifBlank { "Sleep" },
-                description = draft.description,
-                priority = TaskPriority.URGENT,
-                preferredTimePeriodId = null,
-                taskKind = TaskKind.SLEEP,
-                dueAt = windowStartInstant,
-                hasDeadline = false,
-                continuationParentTaskId = null,
-                continuationMode = null,
-                overlapPolicy = TaskOverlapPolicy.DISALLOW,
-                recurrenceRule = RecurrenceRule(
-                    type = RecurrenceType.WEEKLY,
-                    interval = 1,
-                    daysOfWeek = setOf(day),
-                    until = null,
-                    endMode = RecurrenceEndMode.NEVER,
-                    occurrenceCount = null,
-                ),
-                estimatedMinutes = duration,
-                addReminder = false,
-                schedulingMode = TaskSchedulingMode.FLEXIBLE_WINDOW,
-                allowSplitting = false,
-                notBeforeAt = null,
-                fixedStartAt = windowStartInstant,
-                fixedEndAt = windowEndInstant,
-            )
-            results.add(result)
+        val firstDate = draft.firstOccurrence.toLocalDate()
+        val interval = draft.recurrenceInterval.coerceAtLeast(1)
+
+        when (draft.recurrenceType) {
+            RecurrenceType.NONE -> {
+                // Once: one task per selected weekday, non-recurring
+                val weekdays = draft.recurrenceDays.ifEmpty { setOf(firstDate.dayOfWeek) }
+                weekdays.forEach { day ->
+                    val occurrenceDate = nextSleepOccurrenceDate(day, zoneId)
+                    val windowStartInstant = java.time.LocalDateTime.of(occurrenceDate, windowStartTime).atZone(zoneId).toInstant()
+                    val windowEndInstant = java.time.LocalDateTime.of(
+                        if (windowOvernight) occurrenceDate.plusDays(1) else occurrenceDate, windowEndTime,
+                    ).atZone(zoneId).toInstant()
+                    val result = coordinator.createTask(
+                        title = draft.title.ifBlank { "Sleep" }, description = draft.description,
+                        priority = TaskPriority.URGENT, preferredTimePeriodId = null, taskKind = TaskKind.SLEEP,
+                        dueAt = windowStartInstant, hasDeadline = false,
+                        overlapPolicy = TaskOverlapPolicy.DISALLOW,
+                        recurrenceRule = RecurrenceRule(),
+                        estimatedMinutes = duration, addReminder = false,
+                        schedulingMode = TaskSchedulingMode.FLEXIBLE_WINDOW, allowSplitting = false,
+                        fixedStartAt = windowStartInstant, fixedEndAt = windowEndInstant,
+                        firstOccurrence = windowStartInstant,
+                    )
+                    results.add(result)
+                }
+            }
+            RecurrenceType.DAILY -> {
+                // Daily: one recurring task, every interval days
+                val windowStartInstant = java.time.LocalDateTime.of(firstDate, windowStartTime).atZone(zoneId).toInstant()
+                val windowEndInstant = java.time.LocalDateTime.of(
+                    if (windowOvernight) firstDate.plusDays(1) else firstDate, windowEndTime,
+                ).atZone(zoneId).toInstant()
+                val result = coordinator.createTask(
+                    title = draft.title.ifBlank { "Sleep" }, description = draft.description,
+                    priority = TaskPriority.URGENT, preferredTimePeriodId = null, taskKind = TaskKind.SLEEP,
+                    dueAt = windowStartInstant, hasDeadline = false,
+                    overlapPolicy = TaskOverlapPolicy.DISALLOW,
+                    recurrenceRule = RecurrenceRule(type = RecurrenceType.DAILY, interval = interval),
+                    estimatedMinutes = duration, addReminder = false,
+                    schedulingMode = TaskSchedulingMode.FLEXIBLE_WINDOW, allowSplitting = false,
+                    fixedStartAt = windowStartInstant, fixedEndAt = windowEndInstant,
+                    firstOccurrence = windowStartInstant,
+                )
+                results.add(result)
+            }
+            RecurrenceType.WEEKLY -> {
+                // Weekly: one recurring task per selected weekday
+                val weekdays = draft.recurrenceDays.ifEmpty { setOf(firstDate.dayOfWeek) }
+                weekdays.forEach { day ->
+                    val occurrenceDate = nextSleepOccurrenceDate(day, zoneId)
+                    val windowStartInstant = java.time.LocalDateTime.of(occurrenceDate, windowStartTime).atZone(zoneId).toInstant()
+                    val windowEndInstant = java.time.LocalDateTime.of(
+                        if (windowOvernight) occurrenceDate.plusDays(1) else occurrenceDate, windowEndTime,
+                    ).atZone(zoneId).toInstant()
+                    val result = coordinator.createTask(
+                        title = draft.title.ifBlank { "Sleep" }, description = draft.description,
+                        priority = TaskPriority.URGENT, preferredTimePeriodId = null, taskKind = TaskKind.SLEEP,
+                        dueAt = windowStartInstant, hasDeadline = false,
+                        overlapPolicy = TaskOverlapPolicy.DISALLOW,
+                        recurrenceRule = RecurrenceRule(
+                            type = RecurrenceType.WEEKLY, interval = interval,
+                            daysOfWeek = setOf(day),
+                        ),
+                        estimatedMinutes = duration, addReminder = false,
+                        schedulingMode = TaskSchedulingMode.FLEXIBLE_WINDOW, allowSplitting = false,
+                        fixedStartAt = windowStartInstant, fixedEndAt = windowEndInstant,
+                        firstOccurrence = windowStartInstant,
+                    )
+                    results.add(result)
+                }
+            }
+            RecurrenceType.MONTHLY -> {
+                // Monthly: one recurring task, every interval months on the same day-of-month
+                val windowStartInstant = java.time.LocalDateTime.of(firstDate, windowStartTime).atZone(zoneId).toInstant()
+                val windowEndInstant = java.time.LocalDateTime.of(
+                    if (windowOvernight) firstDate.plusDays(1) else firstDate, windowEndTime,
+                ).atZone(zoneId).toInstant()
+                val result = coordinator.createTask(
+                    title = draft.title.ifBlank { "Sleep" }, description = draft.description,
+                    priority = TaskPriority.URGENT, preferredTimePeriodId = null, taskKind = TaskKind.SLEEP,
+                    dueAt = windowStartInstant, hasDeadline = false,
+                    overlapPolicy = TaskOverlapPolicy.DISALLOW,
+                    recurrenceRule = RecurrenceRule(type = RecurrenceType.MONTHLY, interval = interval),
+                    estimatedMinutes = duration, addReminder = false,
+                    schedulingMode = TaskSchedulingMode.FLEXIBLE_WINDOW, allowSplitting = false,
+                    fixedStartAt = windowStartInstant, fixedEndAt = windowEndInstant,
+                    firstOccurrence = windowStartInstant,
+                )
+                results.add(result)
+            }
         }
         return results
     }

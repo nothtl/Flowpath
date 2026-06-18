@@ -122,12 +122,13 @@ class PlannerCoordinator(
         notBeforeAt: Instant? = null,
         fixedStartAt: Instant? = null,
         fixedEndAt: Instant? = null,
+        firstOccurrence: Instant? = null,
     ): TaskCreationResult {
         requireValidContinuationParent(continuationParentTaskId)
         val isRecurringSeries = recurrenceRule.type != RecurrenceType.NONE
         val seriesId = if (isRecurringSeries) newId("series") else null
         val occurrences = materializedOccurrences(
-            initialDueAt = dueAt,
+            initialDueAt = firstOccurrence ?: dueAt,
             recurrenceRule = recurrenceRule,
             schedulingMode = schedulingMode,
             fixedStartAt = fixedStartAt,
