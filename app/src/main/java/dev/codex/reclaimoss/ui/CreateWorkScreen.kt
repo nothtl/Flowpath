@@ -368,8 +368,6 @@ fun CreateWorkScreen(
             listState.animateScrollToItem(1)
         }
     }
-    var showRulesSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
-    var rulesDraft by remember(sessionKey) { mutableStateOf(taskDraft) }
     val continuationTasks = remember(availableTasks, currentTaskId, taskDraft.continuationParentTaskId) {
         availableTasks
             .filter { it.status == TaskStatus.ACTIVE }
@@ -427,46 +425,6 @@ fun CreateWorkScreen(
         if (taskDraft.timeframeId != null && availableTimeframes.none { it.id == taskDraft.timeframeId }) {
             taskDraft = taskDraft.copy(timeframeId = null)
         }
-    }
-    val rulesSummary = remember(
-        taskDraft.continuationParentTaskId,
-        taskDraft.overlapPolicy,
-        taskDraft.addReminder,
-        taskDraft.priority,
-        allowConcurrentTasks,
-    ) {
-        taskRulesSummary(taskDraft, allowConcurrentTasks)
-    }
-    val scheduleRowSummary = remember(
-        taskDraft.schedulingMode,
-        taskDraft.hasDeadline,
-        taskDraft.deadline,
-        taskDraft.fixedDate,
-        taskDraft.fixedStartAt,
-        taskDraft.fixedEndAt,
-        taskDraft.recurrenceType,
-    ) {
-        taskScheduleRowSummary(taskDraft)
-    }
-    val repeatSummary = remember(
-        taskDraft.recurrenceType,
-        taskDraft.recurrenceInterval,
-        taskDraft.recurrenceDays,
-        taskDraft.repeatsForever,
-        taskDraft.deadline,
-        taskDraft.hasDeadline,
-    ) {
-        taskRepeatSummary(taskDraft)
-    }
-    val timingSummary = remember(
-        taskDraft.hasWindow,
-        taskDraft.fixedStartAt,
-        taskDraft.fixedEndAt,
-        taskDraft.schedulingMode,
-        taskDraft.timeframeId,
-        availableTimeframes,
-    ) {
-        taskTimingSummary(taskDraft, availableTimeframes)
     }
     val saveSummary = remember(
         taskDraft.schedulingMode,
@@ -985,16 +943,69 @@ fun CreateWorkScreen(
                                 enter = expandVertically(),
                                 exit = shrinkVertically(),
                             ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                                    SettingsSummaryRow(
-                                        title = "Rules",
-                                        summary = rulesSummary,
-                                        onClick = {
-                                            rulesDraft = taskDraft.resolvedOverlapPolicy(allowConcurrentTasks)
-                                            showRulesSheet = true
-                                        },
-                                    )
+
+                                    TaskSectionTitle("Priority")
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        listOf(TaskPriority.MEDIUM to "Normal", TaskPriority.URGENT to "Urgent").forEach { (priority, label) ->
+                                            FilterChip(
+                                                selected = taskDraft.priority == priority,
+                                                onClick = { taskDraft = taskDraft.copy(priority = priority) },
+                                                label = { Text(label) },
+                                            )
+                                        }
+                                    }
+
+                                    TaskSectionTitle("Overlap")
+                                    if (!allowConcurrentTasks) {
+                                        Text(
+                                            "Concurrent tasks are disabled globally. Enable in Settings to allow overlap.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        listOf(
+                                            TaskOverlapPolicy.ALLOW to "Allow",
+                                            TaskOverlapPolicy.DISALLOW to "No overlap",
+                                        ).forEach { (policy, label) ->
+                                            FilterChip(
+                                                selected = taskDraft.overlapPolicy == policy,
+                                                onClick = { taskDraft = taskDraft.copy(overlapPolicy = policy) },
+                                                label = { Text(label) },
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text("Allow splitting", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                        Switch(
+                                            checked = taskDraft.allowSplitting,
+                                            onCheckedChange = { taskDraft = taskDraft.copy(allowSplitting = it) },
+                                        )
+                                    }
+
+                                    if (!followUpMode && !rescheduleMode) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text("Add reminder", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                            Switch(
+                                                checked = taskDraft.addReminder,
+                                                onCheckedChange = { taskDraft = taskDraft.copy(addReminder = it) },
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1041,27 +1052,6 @@ fun CreateWorkScreen(
         )
     }
     } // close Box
-
-    if (showRulesSheet) {
-        TaskEditorSheet(
-            title = "Rules",
-            onDismiss = { showRulesSheet = false },
-            onDone = {
-                taskDraft = taskDraft.applyRulesEditor(rulesDraft)
-                showRulesSheet = false
-            },
-        ) {
-            CreateFormCard {
-                TaskRulesEditor(
-                    draft = rulesDraft,
-                    onDraftChange = { rulesDraft = it },
-                    continuationTasks = continuationTasks,
-                    showReminderToggle = !followUpMode && !rescheduleMode,
-                    globalAllowConcurrentTasks = allowConcurrentTasks,
-                )
-            }
-        }
-    }
 
 }
 
