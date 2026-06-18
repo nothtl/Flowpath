@@ -70,7 +70,7 @@ enum class TutorialStep(val stepNumber: Int) {
             SAVE -> "Save your sleep schedule"
             MISSING_DAYS -> "Missing days"
             TASK_NAME -> "Name and duration"
-            TASK_OPTIONS -> "Fine-tune your task"
+            TASK_OPTIONS -> "Schedule, repeat & rules"
             TASK_SAVE -> "Save your task"
         }
 
@@ -82,7 +82,7 @@ enum class TutorialStep(val stepNumber: Int) {
             SAVE -> "Tap \"Save sleep\" to create your sleep schedule. Repeat for each day of the week."
             MISSING_DAYS -> "Some days still need a sleep schedule. Tap the unselected days above to set them up."
             TASK_NAME -> "Give your task a name and set how long it takes. Flowpath automatically schedules tasks around your sleep and other events."
-            TASK_OPTIONS -> "Expand More options to set deadlines, repeats, dependencies, and rules. Only touch these if your task needs them — the defaults work for most things."
+            TASK_OPTIONS -> "Tap Schedule & Repeat to set when the task first occurs, how it repeats, and set a deadline. Tap Rules for overlap, splitting, and reminders."
             TASK_SAVE -> "Tap Save Task. Flowpath finds the best available time in your schedule and fits the task in."
         }
 }
