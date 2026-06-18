@@ -115,15 +115,8 @@ fun TimeframeEditorScreen(
             singleLine = true,
         )
 
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        ) {
-            Column(
-                modifier = Modifier.padding(4.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp),
-            ) {
+        CreateFormCard {
+            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 SettingsSummaryRow(
                     title = "Start",
                     summary = formatter.format(draft.startDate),
@@ -134,11 +127,24 @@ fun TimeframeEditorScreen(
                     summary = formatter.format(draft.endDate),
                     onClick = { showEndSheet = true },
                 )
-                SettingsSummaryRow(
-                    title = "Color",
-                    summary = draft.colorHex,
-                    onClick = { showColorSheet = true },
-                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable { showColorSheet = true },
+                    color = Color.Transparent,
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Color", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .background(parseTimeframeColor(draft.colorHex), RoundedCornerShape(999.dp))
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(999.dp)),
+                        )
+                    }
+                }
             }
         }
 
