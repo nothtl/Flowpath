@@ -22,7 +22,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            isMinifyEnabled = false
             // TODO: Replace with a real release keystore before publishing to production.
             signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
