@@ -393,13 +393,14 @@ fun OpenReclaimApp(appGraph: AppGraph) {
 
     if (showingBlockerSheet) {
         var blockerStartDate by remember { mutableStateOf(LocalDate.now()) }
-        var blockerEndDate by remember { mutableStateOf(LocalDate.now()) }
         var blockerStartTime by remember { mutableStateOf(LocalTime.of(9, 0)) }
+        var blockerEndDate by remember { mutableStateOf(LocalDate.now()) }
         var blockerEndTime by remember { mutableStateOf(LocalTime.of(17, 0)) }
         var blockerTitleLocal by remember { mutableStateOf(blockerTitle) }
+        var showBlockerStartSheet by remember { mutableStateOf(false) }
+        var showBlockerEndSheet by remember { mutableStateOf(false) }
         val context = LocalContext.current
-        val dateFormatter = remember { DateTimeFormatter.ofPattern("EEE, MMM d yyyy") }
-        val timeFormatter = remember { DateTimeFormatter.ofPattern("h:mm a") }
+        val dtf = remember { DateTimeFormatter.ofPattern("MMM d, h:mm a") }
 
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -409,7 +410,7 @@ fun OpenReclaimApp(appGraph: AppGraph) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Row(
@@ -431,27 +432,18 @@ fun OpenReclaimApp(appGraph: AppGraph) {
                 )
 
                 CreateFormCard {
-                    DateTimeSection(
-                        title = "Start",
-                        dateTime = blockerStartDate.atTime(blockerStartTime),
-                        onDateTimeChanged = { dt ->
-                            blockerStartDate = dt.toLocalDate()
-                            blockerStartTime = dt.toLocalTime()
-                        },
-                        context = context,
-                    )
-                }
-
-                CreateFormCard {
-                    DateTimeSection(
-                        title = "End",
-                        dateTime = blockerEndDate.atTime(blockerEndTime),
-                        onDateTimeChanged = { dt ->
-                            blockerEndDate = dt.toLocalDate()
-                            blockerEndTime = dt.toLocalTime()
-                        },
-                        context = context,
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingsSummaryRow(
+                            title = "Start",
+                            summary = blockerStartDate.atTime(blockerStartTime).format(dtf),
+                            onClick = { showBlockerStartSheet = true },
+                        )
+                        SettingsSummaryRow(
+                            title = "End",
+                            summary = blockerEndDate.atTime(blockerEndTime).format(dtf),
+                            onClick = { showBlockerEndSheet = true },
+                        )
+                    }
                 }
 
                 Button(
@@ -474,6 +466,42 @@ fun OpenReclaimApp(appGraph: AppGraph) {
                 ) { Text("Save Blocker", style = MaterialTheme.typography.titleMedium) }
 
                 Spacer(Modifier.height(32.dp))
+            }
+        }
+
+        if (showBlockerStartSheet) {
+            ModalBottomSheet(onDismissRequest = { showBlockerStartSheet = false }) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text("Start", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    DateTimeSection(
+                        title = "",
+                        dateTime = blockerStartDate.atTime(blockerStartTime),
+                        onDateTimeChanged = { dt ->
+                            blockerStartDate = dt.toLocalDate()
+                            blockerStartTime = dt.toLocalTime()
+                        },
+                        context = context,
+                    )
+                    Spacer(Modifier.height(24.dp))
+                }
+            }
+        }
+
+        if (showBlockerEndSheet) {
+            ModalBottomSheet(onDismissRequest = { showBlockerEndSheet = false }) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text("End", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    DateTimeSection(
+                        title = "",
+                        dateTime = blockerEndDate.atTime(blockerEndTime),
+                        onDateTimeChanged = { dt ->
+                            blockerEndDate = dt.toLocalDate()
+                            blockerEndTime = dt.toLocalTime()
+                        },
+                        context = context,
+                    )
+                    Spacer(Modifier.height(24.dp))
+                }
             }
         }
         return
