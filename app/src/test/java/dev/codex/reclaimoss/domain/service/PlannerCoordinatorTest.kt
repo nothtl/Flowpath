@@ -1497,7 +1497,7 @@ class PlannerCoordinatorTest {
     fun `weekly flexible window tasks shift their window with each occurrence date`() = runTest {
         val repository = FakePlannerRepository()
         val coordinator = coordinator(repository)
-        val initialDate = LocalDate.of(2026, 5, 18)
+        val initialDate = LocalDate.of(2026, 5, 25)
         val firstWindowStart = ZonedDateTime.of(initialDate, LocalTime.of(18, 0), zone).toInstant()
         val firstWindowEnd = ZonedDateTime.of(initialDate, LocalTime.of(21, 0), zone).toInstant()
 

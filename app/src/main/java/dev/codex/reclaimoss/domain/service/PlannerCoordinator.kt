@@ -207,9 +207,29 @@ class PlannerCoordinator(
         }
         taskIdsNeedingReminder.forEach { createReminderForTask(it) }
         val result = taskResultFor(primaryTaskId, allowSplitting)
-        val failedToFullySchedule = !result.scheduled
-        if (failedToFullySchedule) {
-            // Clean up all occurrences that failed to schedule
+        // For recurring series, keep all occurrences even if the first one failed —
+        // future occurrences may still have been scheduled successfully.
+        if (!result.scheduled && isRecurringSeries) {
+            val anyScheduled = createdTaskIds.any { taskId ->
+                repository.getBlocks().any { it.taskId == taskId }
+            }
+            if (anyScheduled) {
+                // Only clean up individual occurrences that have no blocks.
+                // The primary task remains (with its issue) for the caller to report.
+                createdTaskIds.forEach { taskId ->
+                    if (taskId != primaryTaskId && repository.getBlocks().none { it.taskId == taskId }) {
+                        deleteTaskArtifacts(taskId)
+                    }
+                }
+                // Report as scheduled since at least some occurrences succeeded
+                return TaskCreationResult(
+                    taskId = primaryTaskId,
+                    scheduled = true,
+                    partial = false,
+                )
+            }
+        }
+        if (!result.scheduled) {
             createdTaskIds.forEach { deleteTaskArtifacts(it) }
         }
         return result
@@ -1203,6 +1223,20 @@ class PlannerCoordinator(
                 )
                 repository.upsertTask(updatedTask)
                 rebuildSchedule()
+                // If the flexible fallback also failed, restore correct error
+                if (repository.getBlocks().none { it.taskId == taskId }) {
+                    repository.replaceSchedulingIssuesForTask(
+                        taskId,
+                        listOf(
+                            SchedulingIssue(
+                                taskId = taskId,
+                                type = SchedulingIssueType.UNSCHEDULED,
+                                unscheduledMinutes = task.remainingMinutes,
+                                reason = "This fixed time is blocked by another task or calendar event.",
+                            ),
+                        ),
+                    )
+                }
             } else {
                 repository.replaceSchedulingIssuesForTask(
                     taskId,

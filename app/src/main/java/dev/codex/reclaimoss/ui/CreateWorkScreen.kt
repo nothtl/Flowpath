@@ -323,13 +323,15 @@ fun CreateWorkScreen(
     var daysSectionBounds by remember { mutableStateOf<Rect?>(null) }
     var windowSectionBounds by remember { mutableStateOf<Rect?>(null) }
     var saveBarBounds by remember { mutableStateOf<Rect?>(null) }
-    var moreOptionsBounds by remember { mutableStateOf<Rect?>(null) }
+    var scheduleRepeatBounds by remember { mutableStateOf<Rect?>(null) }
+    var rulesBounds by remember { mutableStateOf<Rect?>(null) }
     var overlayOffset by remember { mutableStateOf(Offset.Zero) }
     val currentTutorialBounds = when {
         showTaskTutorial -> when (tutorialStep) {
             0 -> durationSectionBounds
-            1 -> moreOptionsBounds
-            2 -> saveBarBounds
+            1 -> scheduleRepeatBounds
+            2 -> rulesBounds
+            3 -> saveBarBounds
             else -> null
         }
         else -> when (tutorialStep) {
@@ -351,15 +353,18 @@ fun CreateWorkScreen(
             3 -> {} // save bar is always visible
         }
     }
-    // Auto-expand Schedule & Repeat when tutorial highlights it
+    // Auto-expand sections when tutorial highlights them
     LaunchedEffect(tutorialStep, showTaskTutorial) {
-        if (showTaskTutorial && tutorialStep == 1) {
-            showScheduleRepeat = true
+        if (showTaskTutorial) {
+            when (tutorialStep) {
+                1 -> showScheduleRepeat = true
+                2 -> showAdvancedOptions = true  // Rules
+            }
         }
     }
-    // Auto-scroll to show expanded Schedule & Repeat content
-    LaunchedEffect(showScheduleRepeat) {
-        if (showScheduleRepeat) {
+    // Auto-scroll to show expanded content
+    LaunchedEffect(showScheduleRepeat, showAdvancedOptions) {
+        if (showScheduleRepeat || showAdvancedOptions) {
             listState.animateScrollToItem(1)
         }
     }
@@ -758,7 +763,7 @@ fun CreateWorkScreen(
                                     .then(
                                         if (showTutorial && showTaskTutorial) Modifier.onGloballyPositioned { coords ->
                                             val pos = coords.positionInRoot(); val sz = coords.size
-                                            moreOptionsBounds = Rect(pos, Size(sz.width.toFloat(), sz.height.toFloat()))
+                                            scheduleRepeatBounds = Rect(pos, Size(sz.width.toFloat(), sz.height.toFloat()))
                                         } else Modifier
                                     )
                                     .clip(RoundedCornerShape(14.dp))
@@ -954,7 +959,7 @@ fun CreateWorkScreen(
                                     .then(
                                         if (showTutorial && showTaskTutorial) Modifier.onGloballyPositioned { coords ->
                                             val pos = coords.positionInRoot(); val sz = coords.size
-                                            moreOptionsBounds = Rect(pos, Size(sz.width.toFloat(), sz.height.toFloat()))
+                                            rulesBounds = Rect(pos, Size(sz.width.toFloat(), sz.height.toFloat()))
                                         } else Modifier
                                     )
                                     .clip(RoundedCornerShape(14.dp))

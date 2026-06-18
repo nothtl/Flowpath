@@ -60,7 +60,8 @@ enum class TutorialStep(val stepNumber: Int) {
     MISSING_DAYS(4),
     TASK_NAME(10),
     TASK_OPTIONS(11),
-    TASK_SAVE(12);
+    TASK_RULES(12),
+    TASK_SAVE(13);
 
     val title: String
         @Composable get() = when (this) {
@@ -70,7 +71,8 @@ enum class TutorialStep(val stepNumber: Int) {
             SAVE -> "Save your sleep schedule"
             MISSING_DAYS -> "Missing days"
             TASK_NAME -> "Name and duration"
-            TASK_OPTIONS -> "Schedule, repeat & rules"
+            TASK_OPTIONS -> "Schedule & repeat"
+            TASK_RULES -> "Rules"
             TASK_SAVE -> "Save your task"
         }
 
@@ -82,12 +84,13 @@ enum class TutorialStep(val stepNumber: Int) {
             SAVE -> "Tap \"Save sleep\" to create your sleep schedule. Repeat for each day of the week."
             MISSING_DAYS -> "Some days still need a sleep schedule. Tap the unselected days above to set them up."
             TASK_NAME -> "Give your task a name and set how long it takes. Flowpath automatically schedules tasks around your sleep and other events."
-            TASK_OPTIONS -> "Tap Schedule & Repeat to set when the task first occurs, how it repeats, and set a deadline. Tap Rules for overlap, splitting, and reminders."
+            TASK_OPTIONS -> "Expand Schedule & Repeat to set the first occurrence date, time mode, and how the task repeats. Set a deadline if needed."
+            TASK_RULES -> "Expand Rules to configure overlap policy, splitting, dependencies, and reminders. The defaults work for most tasks."
             TASK_SAVE -> "Tap Save Task. Flowpath finds the best available time in your schedule and fits the task in."
         }
 }
 
-fun taskCreationSteps(): List<TutorialStep> = listOf(TutorialStep.TASK_NAME, TutorialStep.TASK_OPTIONS, TutorialStep.TASK_SAVE)
+fun taskCreationSteps(): List<TutorialStep> = listOf(TutorialStep.TASK_NAME, TutorialStep.TASK_OPTIONS, TutorialStep.TASK_RULES, TutorialStep.TASK_SAVE)
 fun missingDaysSteps(missingCount: Int): List<TutorialStep> = listOf(TutorialStep.DURATION, TutorialStep.DAYS, TutorialStep.WINDOW, TutorialStep.SAVE)
 fun singleMissingStep(): List<TutorialStep> = listOf(TutorialStep.MISSING_DAYS)
 
