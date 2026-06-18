@@ -229,6 +229,9 @@ fun OpenReclaimApp(appGraph: AppGraph) {
     BackHandler(enabled = showingReminderCreate) {
         showingReminderCreate = false
     }
+    BackHandler(enabled = showingBlockerSheet) {
+        showingBlockerSheet = false
+    }
     BackHandler(enabled = showingTimeframeEditor) {
         showingTimeframeEditor = false
         timeframeDraftOverride = null
@@ -471,6 +474,7 @@ fun OpenReclaimApp(appGraph: AppGraph) {
                 Spacer(Modifier.height(32.dp))
             }
         }
+        return
     }
 
     if (showingReminderCreate) {
