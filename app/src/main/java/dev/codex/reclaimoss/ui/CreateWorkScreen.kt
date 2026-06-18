@@ -695,7 +695,7 @@ fun CreateWorkScreen(
                                         onClick = { showFirstOccurrenceSheet = true },
                                     )
                                     SettingsSummaryRow(
-                                        title = "Time",
+                                        title = "Flexibility",
                                         summary = taskDraft.schedulingMode.labelForCreate(),
                                         onClick = { showTimeModeSheet = true },
                                     )
@@ -863,7 +863,7 @@ fun CreateWorkScreen(
     if (showTimeModeSheet) {
         ModalBottomSheet(onDismissRequest = { showTimeModeSheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Time mode", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Flexibility", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 SchedulingModeSection(
                     schedulingMode = taskDraft.schedulingMode,
                     onModeChanged = { newMode ->
