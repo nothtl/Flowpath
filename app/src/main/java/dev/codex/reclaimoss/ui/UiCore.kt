@@ -758,9 +758,16 @@ private fun TaskDraft.fixedEndAtInstantOrNull(): Instant? =
         }
         TaskSchedulingMode.FIXED_DAY -> if (hasWindow) fixedEndAt.atZone(ZoneId.systemDefault()).toInstant() else null
         TaskSchedulingMode.FIXED_EXACT -> fixedEndAt.atZone(ZoneId.systemDefault()).toInstant()
-        TaskSchedulingMode.FLEXIBLE_WINDOW -> LocalDateTime.of(startDate ?: fixedEndAt.toLocalDate(), fixedEndAt.toLocalTime())
-            .atZone(ZoneId.systemDefault())
-            .toInstant()
+        TaskSchedulingMode.FLEXIBLE_WINDOW -> {
+            val sDate = startDate ?: fixedEndAt.toLocalDate()
+            val sTime = fixedStartAt.toLocalTime()
+            val eTime = fixedEndAt.toLocalTime()
+            val overnight = !eTime.isAfter(sTime) || eTime <= sTime
+            val eDate = if (overnight) sDate.plusDays(1) else sDate
+            LocalDateTime.of(eDate, eTime)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+        }
         else -> null
     }
 
