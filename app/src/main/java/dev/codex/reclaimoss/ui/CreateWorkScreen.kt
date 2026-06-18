@@ -710,6 +710,13 @@ fun CreateWorkScreen(
                                             onClick = { showTimeWindowSheet = true },
                                         )
                                     }
+                                    if (taskDraft.schedulingMode == TaskSchedulingMode.FIXED_DAY) {
+                                        SettingsSummaryRow(
+                                            title = "Date",
+                                            summary = taskDraft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
+                                            onClick = { showFirstOccurrenceSheet = true },
+                                        )
+                                    }
                                     if (taskDraft.schedulingMode == TaskSchedulingMode.FIXED_EXACT) {
                                         SettingsSummaryRow(
                                             title = "Start time",
@@ -1096,6 +1103,7 @@ fun SchedulingModeSection(
     val options = listOf(
         TaskSchedulingMode.FLEXIBLE to "Anytime",
         TaskSchedulingMode.FLEXIBLE_WINDOW to "Time window",
+        TaskSchedulingMode.FIXED_DAY to "Fixed date",
         TaskSchedulingMode.FIXED_EXACT to "Fixed time",
     )
     var expanded by remember { mutableStateOf(false) }
