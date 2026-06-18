@@ -23,10 +23,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -45,7 +47,7 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TimeframeEditorScreen(
     padding: PaddingValues,
@@ -72,6 +74,9 @@ fun TimeframeEditorScreen(
     ) { mutableStateOf(initialDraft) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val formatter = remember { DateTimeFormatter.ofPattern("MMM d, yyyy") }
+    var showStartSheet by rememberSaveable { mutableStateOf(false) }
+    var showEndSheet by rememberSaveable { mutableStateOf(false) }
+    var showColorSheet by rememberSaveable { mutableStateOf(false) }
     val palette = remember {
         listOf(
             "#F4B6D2", "#88D1FF", "#F7C948", "#74C69D",
@@ -102,22 +107,72 @@ fun TimeframeEditorScreen(
             )
         }
 
+        OutlinedTextField(
+            value = draft.name,
+            onValueChange = { draft = draft.copy(name = it) },
+            label = { Text("Name") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+
         Card(
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
-                OutlinedTextField(
-                    value = draft.name,
-                    onValueChange = { draft = draft.copy(name = it) },
-                    label = { Text("Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
+                SettingsSummaryRow(
+                    title = "Start",
+                    summary = formatter.format(draft.startDate),
+                    onClick = { showStartSheet = true },
                 )
+                SettingsSummaryRow(
+                    title = "End",
+                    summary = formatter.format(draft.endDate),
+                    onClick = { showEndSheet = true },
+                )
+                SettingsSummaryRow(
+                    title = "Color",
+                    summary = draft.colorHex,
+                    onClick = { showColorSheet = true },
+                )
+            }
+        }
+
+        if (!errorMessage.isNullOrBlank()) {
+            Text(
+                errorMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FilledTonalButton(
+                onClick = { onSave(draft) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Save")
+            }
+            if (onDelete != null && draft.id.isNotBlank()) {
+                OutlinedButton(
+                    onClick = { onDelete(draft.id) },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Delete")
+                }
+            }
+        }
+    }
+
+    // Start date popup
+    if (showStartSheet) {
+        ModalBottomSheet(onDismissRequest = { showStartSheet = false }) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("Start date", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 DateField(
                     label = "Start",
                     value = formatter.format(draft.startDate),
@@ -137,6 +192,16 @@ fun TimeframeEditorScreen(
                         ).show()
                     },
                 )
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+
+    // End date popup
+    if (showEndSheet) {
+        ModalBottomSheet(onDismissRequest = { showEndSheet = false }) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("End date", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 DateField(
                     label = "End",
                     value = formatter.format(draft.endDate),
@@ -152,7 +217,16 @@ fun TimeframeEditorScreen(
                         ).show()
                     },
                 )
-                Text("Color", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+
+    // Color popup
+    if (showColorSheet) {
+        ModalBottomSheet(onDismissRequest = { showColorSheet = false }) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("Color", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -179,30 +253,7 @@ fun TimeframeEditorScreen(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
-                if (!errorMessage.isNullOrBlank()) {
-                    Text(
-                        errorMessage,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FilledTonalButton(
-                onClick = { onSave(draft) },
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("Save")
-            }
-            if (onDelete != null && draft.id.isNotBlank()) {
-                OutlinedButton(
-                    onClick = { onDelete(draft.id) },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Delete")
-                }
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
