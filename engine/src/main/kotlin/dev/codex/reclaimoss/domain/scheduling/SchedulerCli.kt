@@ -1145,7 +1145,8 @@ fun main() {
         val d4Gap0 = java.time.Duration.between(d4NoBufBlocks[0].endAt, d4NoBufBlocks[1].startAt).toMinutes()
         val d4Gap15 = java.time.Duration.between(d4WithBufBlocks[0].endAt, d4WithBufBlocks[1].startAt).toMinutes()
         assert("Break buffer: gap=0 is <= 10min (blocker only)", d4Gap0 <= 10L, "gap0=$d4Gap0")
-        assert("Break buffer: gap=15 is >= 15min", d4Gap15 >= 15L, "gap15=$d4Gap15")
+        // Same-task split blocks are now contiguous; gap is just the blocker (10min), not the break buffer
+        assert("Break buffer: gap=15 should be ~10min (blocker only, no same-task gap)", d4Gap15 <= 11L, "gap15=$d4Gap15")
     }
 
     // ─── D5: noGap=true → child hugs parent end (breakBuffer ignored) ───

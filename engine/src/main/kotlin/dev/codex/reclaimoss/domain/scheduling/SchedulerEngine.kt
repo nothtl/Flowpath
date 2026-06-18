@@ -316,11 +316,12 @@ class SchedulerEngine {
             }
 
             val effectiveAllowSplitting = policy.allowTaskSplitting && task.allowSplitting
-            // When splitting, allow remaining portions to extend past the deadline
-            // so they can be placed after a blocker (e.g. sleep). But NEVER override
-            // a dependency boundary — the task must respect its parent constraint.
+            // Splittable tasks can extend past the deadline so they can
+            // be split around sleep/blockers into future days. The extension
+            // applies from the first iteration so the while-loop gate allows
+            // past-deadline blocks. Dependency-constrained tasks cannot extend.
             val hasDependencyConstraint = dependencyEndBoundary != null || dependencyStartBoundary != null
-            val splitLoopEnd = if (effectiveAllowSplitting && remaining < startingRemaining && !hasDependencyConstraint) {
+            val splitLoopEnd = if (effectiveAllowSplitting && !hasDependencyConstraint) {
                 maxInstant(effectiveTaskDueAt, cursor.plus(policy.lookAheadDays.toLong(), ChronoUnit.DAYS))
             } else {
                 effectiveTaskDueAt
@@ -374,7 +375,10 @@ class SchedulerEngine {
                 results += block
                 pendingBlocksPool += block
                 remaining -= minutes
-                cursor = block.endAt.plus(policy.breakBetweenBlocksMinutes.toLong(), ChronoUnit.MINUTES)
+                // Same-task split blocks should be contiguous; only add break
+                // buffer when transitioning to a different task.
+                cursor = if (remaining > 0) block.endAt
+                    else block.endAt.plus(policy.breakBetweenBlocksMinutes.toLong(), ChronoUnit.MINUTES)
             }
 
             if (remaining > 0) {

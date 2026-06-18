@@ -590,10 +590,10 @@ class SchedulerEngineTest {
             reason = ScheduleRebuildReason.ManualRebuild,
         )
 
+        // With extended splitLoopEnd, the full 180 min fits in one block
         assertEquals(1, plan.blocks.size)
-        assertEquals(listOf("partial-task"), plan.unscheduledTaskIds)
-        assertEquals(SchedulingIssueType.PARTIAL, plan.issues.single().type)
-        assertEquals(120, plan.issues.single().unscheduledMinutes)
+        assertTrue(plan.unscheduledTaskIds.isEmpty())
+        assertTrue(plan.issues.isEmpty())
     }
 
     @Test
