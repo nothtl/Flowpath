@@ -724,11 +724,32 @@ fun CreateWorkScreen(
                                             onClick = { showRepeatSheet = true },
                                         )
                                     }
-                                    SettingsSummaryRow(
-                                        title = if (taskDraft.hasDeadline) "Deadline" else "Deadline",
-                                        summary = if (taskDraft.hasDeadline) taskDraft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")) else "None",
-                                        onClick = { showDeadlineSheet = true },
-                                    )
+                                    if (taskDraft.schedulingMode == TaskSchedulingMode.FLEXIBLE) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text("No deadline", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                            Switch(
+                                                checked = !taskDraft.hasDeadline,
+                                                onCheckedChange = { enabled ->
+                                                    taskDraft = taskDraft.copy(
+                                                        hasDeadline = !enabled,
+                                                        repeatsForever = if (enabled && taskDraft.recurrenceType != RecurrenceType.NONE) true
+                                                            else if (!enabled && taskDraft.recurrenceType != RecurrenceType.NONE) false else taskDraft.repeatsForever,
+                                                    )
+                                                },
+                                            )
+                                        }
+                                    }
+                                    if (taskDraft.hasDeadline) {
+                                        SettingsSummaryRow(
+                                            title = "Deadline",
+                                            summary = taskDraft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")),
+                                            onClick = { showDeadlineSheet = true },
+                                        )
+                                    }
                                 }
                             }
                         }
