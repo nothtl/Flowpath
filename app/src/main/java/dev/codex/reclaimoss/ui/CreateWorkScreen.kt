@@ -302,9 +302,9 @@ fun CreateWorkScreen(
     }
     var showScheduleRepeat by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showAdvancedOptions by rememberSaveable(sessionKey) { mutableStateOf(false) }
-    var showFirstOccurrenceSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
-    var showTimeModeSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
+    var showWhenSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showTimeWindowSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
+    var showSleepPlacedAfterSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showRepeatSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showDeadlineSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showPrioritySheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
@@ -527,6 +527,12 @@ fun CreateWorkScreen(
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .then(
+                                        if (showTutorial) Modifier.onGloballyPositioned { coords ->
+                                            val pos = coords.positionInRoot(); val sz = coords.size
+                                            scheduleRepeatBounds = Rect(pos, Size(sz.width.toFloat(), sz.height.toFloat()))
+                                        } else Modifier
+                                    )
                                     .clip(RoundedCornerShape(14.dp))
                                     .clickable { showScheduleRepeat = !showScheduleRepeat },
                                 shape = RoundedCornerShape(14.dp),
@@ -556,7 +562,7 @@ fun CreateWorkScreen(
                                     SettingsSummaryRow(
                                         title = "Placed after",
                                         summary = taskDraft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")),
-                                        onClick = { showFirstOccurrenceSheet = true },
+                                        onClick = { showSleepPlacedAfterSheet = true },
                                     )
                                     SettingsSummaryRow(
                                         title = "Sleep window",
@@ -690,60 +696,10 @@ fun CreateWorkScreen(
 
                                     // Summary rows — each opens a bottom sheet
                                     SettingsSummaryRow(
-                                        title = "Placed after",
-                                        summary = taskDraft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")),
-                                        onClick = { showFirstOccurrenceSheet = true },
+                                        title = "When",
+                                        summary = whenSummary(taskDraft),
+                                        onClick = { showWhenSheet = true },
                                     )
-                                    SettingsSummaryRow(
-                                        title = "Flexibility",
-                                        summary = taskDraft.schedulingMode.labelForCreate(),
-                                        onClick = { showTimeModeSheet = true },
-                                    )
-                                    if (taskDraft.schedulingMode == TaskSchedulingMode.FLEXIBLE_WINDOW) {
-                                        SettingsSummaryRow(
-                                            title = "Window",
-                                            summary = buildString {
-                                                append(taskDraft.fixedStartAt.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a")))
-                                                append(" - ")
-                                                append(taskDraft.fixedEndAt.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a")))
-                                            },
-                                            onClick = { showTimeWindowSheet = true },
-                                        )
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Text("Any date", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                                            Switch(
-                                                checked = !taskDraft.hasWindow,
-                                                onCheckedChange = { anyDate ->
-                                                    taskDraft = taskDraft.copy(hasWindow = !anyDate)
-                                                },
-                                            )
-                                        }
-                                        if (taskDraft.hasWindow) {
-                                            SettingsSummaryRow(
-                                                title = "Date",
-                                                summary = taskDraft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
-                                                onClick = { showFirstOccurrenceSheet = true },
-                                            )
-                                        }
-                                    }
-                                    if (taskDraft.schedulingMode == TaskSchedulingMode.FIXED_DAY) {
-                                        SettingsSummaryRow(
-                                            title = "Date",
-                                            summary = taskDraft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
-                                            onClick = { showFirstOccurrenceSheet = true },
-                                        )
-                                    }
-                                    if (taskDraft.schedulingMode == TaskSchedulingMode.FIXED_EXACT) {
-                                        SettingsSummaryRow(
-                                            title = "Start time",
-                                            summary = taskDraft.fixedStartAt.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")),
-                                            onClick = { showTimeWindowSheet = true },
-                                        )
-                                    }
                                     if (!followUpMode && !rescheduleMode) {
                                         SettingsSummaryRow(
                                             title = "Repeat",
@@ -770,7 +726,7 @@ fun CreateWorkScreen(
                                             )
                                         }
                                     }
-                                    if (taskDraft.hasDeadline) {
+                                    if (taskDraft.hasDeadline && taskDraft.schedulingMode == TaskSchedulingMode.FLEXIBLE) {
                                         SettingsSummaryRow(
                                             title = "Deadline",
                                             summary = taskDraft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")),
@@ -893,43 +849,134 @@ fun CreateWorkScreen(
 
     // ── Popup Sheets ──
 
-    if (showFirstOccurrenceSheet) {
-        ModalBottomSheet(onDismissRequest = { showFirstOccurrenceSheet = false }) {
+    if (showWhenSheet) {
+        ModalBottomSheet(onDismissRequest = { showWhenSheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Placed after", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                DateTimeSection(
-                    title = "",
-                    dateTime = taskDraft.firstOccurrence,
-                    onDateTimeChanged = { taskDraft = taskDraft.copy(firstOccurrence = it) },
-                    context = context,
-                )
-                Spacer(Modifier.height(24.dp))
-            }
-        }
-    }
-
-    if (showTimeModeSheet) {
-        ModalBottomSheet(onDismissRequest = { showTimeModeSheet = false }) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Flexibility", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("When", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 SchedulingModeSection(
                     schedulingMode = taskDraft.schedulingMode,
                     onModeChanged = { newMode ->
+                        // Determine the anchor date from the current mode
+                        val anchorDate: LocalDate = when (taskDraft.schedulingMode) {
+                            TaskSchedulingMode.FLEXIBLE -> taskDraft.firstOccurrence.toLocalDate()
+                            TaskSchedulingMode.FLEXIBLE_WINDOW -> taskDraft.fixedStartAt.toLocalDate()
+                            TaskSchedulingMode.FIXED_DAY -> taskDraft.fixedDate
+                            TaskSchedulingMode.FIXED_EXACT -> taskDraft.fixedStartAt.toLocalDate()
+                        }
+                        // Preserve time-of-day from current fixedStartAt/fixedEndAt (or use defaults)
+                        val startTime: LocalTime = taskDraft.fixedStartAt.toLocalTime()
+                        val endTime: LocalTime = taskDraft.fixedEndAt.toLocalTime()
                         taskDraft = taskDraft.copy(
                             schedulingMode = newMode,
-                            hasWindow = newMode == TaskSchedulingMode.FLEXIBLE_WINDOW,
+                            hasWindow = if (newMode == TaskSchedulingMode.FLEXIBLE_WINDOW) taskDraft.hasWindow else false,
                             hasDeadline = if (newMode == TaskSchedulingMode.FLEXIBLE) taskDraft.hasDeadline else true,
+                            firstOccurrence = when (newMode) {
+                                TaskSchedulingMode.FIXED_EXACT -> taskDraft.firstOccurrence // keep existing
+                                else -> LocalDateTime.of(anchorDate, taskDraft.firstOccurrence.toLocalTime())
+                            },
+                            fixedDate = when (newMode) {
+                                TaskSchedulingMode.FLEXIBLE_WINDOW -> anchorDate
+                                TaskSchedulingMode.FIXED_DAY -> anchorDate
+                                else -> taskDraft.fixedDate
+                            },
                             fixedStartAt = when (newMode) {
-                                TaskSchedulingMode.FIXED_EXACT -> taskDraft.firstOccurrence
-                                else -> taskDraft.firstOccurrence.withHour(taskDraft.fixedStartAt.hour).withMinute(taskDraft.fixedStartAt.minute)
+                                TaskSchedulingMode.FIXED_EXACT -> LocalDateTime.of(anchorDate, startTime)
+                                else -> LocalDateTime.of(anchorDate, startTime)
                             },
                             fixedEndAt = when (newMode) {
-                                TaskSchedulingMode.FIXED_EXACT -> taskDraft.firstOccurrence.plusMinutes(taskDraft.estimatedMinutes.toLong())
-                                else -> taskDraft.firstOccurrence.withHour(taskDraft.fixedEndAt.hour).withMinute(taskDraft.fixedEndAt.minute)
+                                TaskSchedulingMode.FIXED_EXACT -> LocalDateTime.of(anchorDate, startTime).plusMinutes(taskDraft.estimatedMinutes.toLong())
+                                else -> LocalDateTime.of(anchorDate, endTime)
+                            },
+                            deadline = when (newMode) {
+                                TaskSchedulingMode.FIXED_EXACT -> LocalDateTime.of(anchorDate, startTime).plusMinutes(taskDraft.estimatedMinutes.toLong())
+                                else -> taskDraft.deadline
                             },
                         )
                     },
                 )
+                Spacer(Modifier.height(4.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                when (taskDraft.schedulingMode) {
+                    TaskSchedulingMode.FLEXIBLE -> {
+                        Text("After", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        DateTimeSection(
+                            title = "",
+                            dateTime = taskDraft.firstOccurrence,
+                            onDateTimeChanged = { taskDraft = taskDraft.copy(firstOccurrence = it) },
+                            context = context,
+                        )
+                    }
+                    TaskSchedulingMode.FLEXIBLE_WINDOW -> {
+                        DailyWindowConfigurator(
+                            hasWindow = true, canDisable = false,
+                            startTime = taskDraft.fixedStartAt.toLocalTime(),
+                            endTime = taskDraft.fixedEndAt.toLocalTime(),
+                            endsNextDay = taskDraft.fixedEndAt.toLocalTime() <= taskDraft.fixedStartAt.toLocalTime(),
+                            minimumWindowMinutes = taskDraft.estimatedMinutes,
+                            onWindowEnabledChanged = {},
+                            onWindowChanged = { start, end, overnight ->
+                                val anchorDate = taskDraft.firstOccurrence.toLocalDate()
+                                val endDate = if (overnight) anchorDate.plusDays(1) else anchorDate
+                                taskDraft = taskDraft.copy(
+                                    fixedStartAt = LocalDateTime.of(anchorDate, start),
+                                    fixedEndAt = LocalDateTime.of(endDate, end),
+                                )
+                            },
+                            context = context,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Any date", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                            Switch(
+                                checked = !taskDraft.hasWindow,
+                                onCheckedChange = { anyDate ->
+                                    taskDraft = taskDraft.copy(hasWindow = !anyDate)
+                                },
+                            )
+                        }
+                        if (taskDraft.hasWindow) {
+                            Text("Date", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            DateTimeSection(
+                                title = "",
+                                dateTime = taskDraft.fixedDate.atStartOfDay(),
+                                onDateTimeChanged = { taskDraft = taskDraft.copy(fixedDate = it.toLocalDate()) },
+                                context = context,
+                                dateOnly = true,
+                            )
+                        }
+                    }
+                    TaskSchedulingMode.FIXED_DAY -> {
+                        Text("Date", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        DateTimeSection(
+                            title = "",
+                            dateTime = taskDraft.fixedDate.atStartOfDay(),
+                            onDateTimeChanged = { taskDraft = taskDraft.copy(fixedDate = it.toLocalDate()) },
+                            context = context,
+                            dateOnly = true,
+                        )
+                    }
+                    TaskSchedulingMode.FIXED_EXACT -> {
+                        Text("Start time", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        FixedTimeSection(
+                            recurrenceType = taskDraft.recurrenceType,
+                            dateTime = taskDraft.fixedStartAt,
+                            onDateTimeChanged = {
+                                val adjustedEnd = it.plusMinutes(taskDraft.estimatedMinutes.toLong())
+                                taskDraft = taskDraft.copy(fixedStartAt = it, fixedEndAt = adjustedEnd, deadline = adjustedEnd)
+                            },
+                            onTimeChanged = { selectedTime ->
+                                val adjustedStart = taskDraft.fixedStartAt.withHour(selectedTime.hour).withMinute(selectedTime.minute).withSecond(0).withNano(0)
+                                val adjustedEnd = adjustedStart.plusMinutes(taskDraft.estimatedMinutes.toLong())
+                                taskDraft = taskDraft.copy(fixedStartAt = adjustedStart, fixedEndAt = adjustedEnd, deadline = adjustedEnd)
+                            },
+                            context = context,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -938,42 +985,39 @@ fun CreateWorkScreen(
     if (showTimeWindowSheet) {
         ModalBottomSheet(onDismissRequest = { showTimeWindowSheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (taskDraft.schedulingMode == TaskSchedulingMode.FLEXIBLE_WINDOW) {
-                    Text(if (sleepMode) "Sleep window" else "Time window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    DailyWindowConfigurator(
-                        hasWindow = true, canDisable = false,
-                        startTime = taskDraft.fixedStartAt.toLocalTime(),
-                        endTime = taskDraft.fixedEndAt.toLocalTime(),
-                        endsNextDay = taskDraft.fixedEndAt.toLocalTime() <= taskDraft.fixedStartAt.toLocalTime(),
-                        minimumWindowMinutes = if (sleepMode) taskDraft.estimatedMinutes.coerceAtLeast(240) else taskDraft.estimatedMinutes,
-                        onWindowEnabledChanged = {},
-                        onWindowChanged = { start, end, overnight ->
-                            val anchorDate = if (sleepMode) java.time.LocalDate.now() else taskDraft.firstOccurrence.toLocalDate()
-                            val endDate = if (overnight) anchorDate.plusDays(1) else anchorDate
-                            taskDraft = taskDraft.copy(
-                                fixedStartAt = LocalDateTime.of(anchorDate, start),
-                                fixedEndAt = LocalDateTime.of(endDate, end),
-                            )
-                        },
-                        context = context,
-                    )
-                } else {
-                    Text("Start time", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    FixedTimeSection(
-                        recurrenceType = taskDraft.recurrenceType,
-                        dateTime = taskDraft.fixedStartAt,
-                        onDateTimeChanged = {
-                            val adjustedEnd = it.plusMinutes(taskDraft.estimatedMinutes.toLong())
-                            taskDraft = taskDraft.copy(fixedStartAt = it, fixedEndAt = adjustedEnd, deadline = adjustedEnd)
-                        },
-                        onTimeChanged = { selectedTime ->
-                            val adjustedStart = taskDraft.fixedStartAt.withHour(selectedTime.hour).withMinute(selectedTime.minute).withSecond(0).withNano(0)
-                            val adjustedEnd = adjustedStart.plusMinutes(taskDraft.estimatedMinutes.toLong())
-                            taskDraft = taskDraft.copy(fixedStartAt = adjustedStart, fixedEndAt = adjustedEnd, deadline = adjustedEnd)
-                        },
-                        context = context,
-                    )
-                }
+                Text(if (sleepMode) "Sleep window" else "Time window", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                DailyWindowConfigurator(
+                    hasWindow = true, canDisable = false,
+                    startTime = taskDraft.fixedStartAt.toLocalTime(),
+                    endTime = taskDraft.fixedEndAt.toLocalTime(),
+                    endsNextDay = taskDraft.fixedEndAt.toLocalTime() <= taskDraft.fixedStartAt.toLocalTime(),
+                    minimumWindowMinutes = if (sleepMode) taskDraft.estimatedMinutes.coerceAtLeast(240) else taskDraft.estimatedMinutes,
+                    onWindowEnabledChanged = {},
+                    onWindowChanged = { start, end, overnight ->
+                        val anchorDate = if (sleepMode) java.time.LocalDate.now() else taskDraft.firstOccurrence.toLocalDate()
+                        val endDate = if (overnight) anchorDate.plusDays(1) else anchorDate
+                        taskDraft = taskDraft.copy(
+                            fixedStartAt = LocalDateTime.of(anchorDate, start),
+                            fixedEndAt = LocalDateTime.of(endDate, end),
+                        )
+                    },
+                    context = context,
+                )
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+
+    if (showSleepPlacedAfterSheet) {
+        ModalBottomSheet(onDismissRequest = { showSleepPlacedAfterSheet = false }) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("Placed after", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                DateTimeSection(
+                    title = "",
+                    dateTime = taskDraft.firstOccurrence,
+                    onDateTimeChanged = { taskDraft = taskDraft.copy(firstOccurrence = it) },
+                    context = context,
+                )
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -3039,6 +3083,33 @@ private fun WindowTimeField(
                 ).show()
             },
         )
+    }
+}
+
+fun whenSummary(taskDraft: TaskDraft): String {
+    return when (taskDraft.schedulingMode) {
+        TaskSchedulingMode.FLEXIBLE -> {
+            val after = taskDraft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))
+            "Anytime after $after"
+        }
+        TaskSchedulingMode.FLEXIBLE_WINDOW -> {
+            val start = taskDraft.fixedStartAt.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a"))
+            val end = taskDraft.fixedEndAt.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a"))
+            if (taskDraft.hasWindow) {
+                val date = taskDraft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d"))
+                "$date, $start – $end"
+            } else {
+                "Daily $start – $end"
+            }
+        }
+        TaskSchedulingMode.FIXED_DAY -> {
+            val date = taskDraft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
+            "On $date"
+        }
+        TaskSchedulingMode.FIXED_EXACT -> {
+            val time = taskDraft.fixedStartAt.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))
+            "At $time"
+        }
     }
 }
 
