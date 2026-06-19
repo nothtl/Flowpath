@@ -138,6 +138,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -198,7 +199,15 @@ data class TaskDraft(
     val recurrenceInterval: Int = 1,
     val recurrenceDays: Set<DayOfWeek> = emptySet(),
     val recurrenceOccurrenceLimit: Int? = null,
+    // Tab state (UI only, computed into schedulingMode at save)
+    val dayOn: Boolean = false,
+    val dayAfter: Boolean = false,
+    val dayBy: Boolean = false,
+    val hoursMode: HoursMode = HoursMode.ANY,
+    val hoursAtTime: LocalTime = LocalTime.of(9, 0),
 )
+
+enum class HoursMode { ANY, WINDOW, AT }
 
 data class ReminderDraft(
     val title: String = "",
@@ -330,7 +339,7 @@ class PlannerViewModel(
             priority = draft.priority,
             preferredTimePeriodId = null,
             timeframeId = draft.timeframeId,
-            hasDeadline = draft.hasDeadline,
+            hasDeadline = draft.dayBy || draft.dayOn,
             continuationParentTaskId = draft.continuationParentTaskId,
             continuationMode = draft.continuationMode,
             noGap = draft.noGap,
@@ -347,7 +356,7 @@ class PlannerViewModel(
             ),
             estimatedMinutes = draft.estimatedMinutes,
             addReminder = draft.addReminder,
-            schedulingMode = draft.schedulingMode,
+            schedulingMode = draft.computeSchedulingMode(),
             fixedStartAt = draft.schedulingStartInstantOrNull(),
             fixedEndAt = draft.fixedEndAtInstantOrNull(),
             firstOccurrence = draft.firstOccurrence.atZone(ZoneId.systemDefault()).toInstant(),
@@ -690,6 +699,21 @@ class PlannerViewModel(
     suspend fun setTaskHourHeightDp(value: Int) = settingsRepository.setTaskHourHeightDp(value)
 }
 
+internal fun recurrenceNeedsAnchor(recurrenceType: RecurrenceType, interval: Int, days: Set<DayOfWeek>): Boolean = when (recurrenceType) {
+    RecurrenceType.NONE -> false
+    RecurrenceType.DAILY -> interval >= 2
+    RecurrenceType.WEEKLY -> interval >= 2 || days.isEmpty()
+    RecurrenceType.MONTHLY -> true
+}
+
+internal fun TaskDraft.computeSchedulingMode(): TaskSchedulingMode = when {
+    hoursMode == HoursMode.AT && dayOn -> TaskSchedulingMode.FIXED_EXACT
+    hoursMode == HoursMode.AT -> TaskSchedulingMode.FLEXIBLE_TIME
+    hoursMode == HoursMode.WINDOW -> TaskSchedulingMode.FLEXIBLE_WINDOW
+    dayOn -> TaskSchedulingMode.FIXED_DAY
+    else -> TaskSchedulingMode.FLEXIBLE
+}
+
 private fun TaskDraft.taskDueAtInstant(): Instant =
     taskDueAtLocalDateTime().atZone(ZoneId.systemDefault()).toInstant()
 
@@ -704,6 +728,7 @@ private fun TaskDraft.repeatDeadlineOrNull(): Instant? {
     if (recurrenceType == RecurrenceType.NONE || (!hasDeadline && repeatsForever)) return null
     val deadlineInstant = when (schedulingMode) {
         TaskSchedulingMode.FLEXIBLE -> deadline.atZone(ZoneId.systemDefault()).toInstant()
+        TaskSchedulingMode.FLEXIBLE_TIME -> deadline.atZone(ZoneId.systemDefault()).toInstant()
         TaskSchedulingMode.FIXED_DAY -> fixedDate.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().minusSeconds(1)
         TaskSchedulingMode.FIXED_EXACT -> fixedEndAt.atZone(ZoneId.systemDefault()).toInstant()
         TaskSchedulingMode.FLEXIBLE_WINDOW -> deadline.atZone(ZoneId.systemDefault()).toInstant()
@@ -792,11 +817,19 @@ fun Reminder.dueDisplayText(
 }
 
 private fun TaskDraft.schedulingStartInstantOrNull(): Instant? =
-    when (schedulingMode) {
+    when (computeSchedulingMode()) {
         TaskSchedulingMode.FLEXIBLE -> if (hasWindow) {
             fixedStartAt.atZone(ZoneId.systemDefault()).toInstant()
         } else {
             startDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()
+        }
+        TaskSchedulingMode.FLEXIBLE_TIME -> {
+            val anchorDate = when {
+                dayOn -> fixedDate
+                dayAfter -> firstOccurrence.toLocalDate()
+                else -> firstOccurrence.toLocalDate()
+            }
+            LocalDateTime.of(anchorDate, hoursAtTime).atZone(ZoneId.systemDefault()).toInstant()
         }
         TaskSchedulingMode.FIXED_DAY -> null
         TaskSchedulingMode.FIXED_EXACT -> fixedStartAt.atZone(ZoneId.systemDefault()).toInstant()
@@ -806,11 +839,15 @@ private fun TaskDraft.schedulingStartInstantOrNull(): Instant? =
     }
 
 private fun TaskDraft.fixedEndAtInstantOrNull(): Instant? =
-    when (schedulingMode) {
+    when (computeSchedulingMode()) {
         TaskSchedulingMode.FLEXIBLE -> if (hasWindow) {
             fixedEndAt.atZone(ZoneId.systemDefault()).toInstant()
         } else {
             null
+        }
+        TaskSchedulingMode.FLEXIBLE_TIME -> {
+            val start = schedulingStartInstantOrNull() ?: return null
+            start.plus(estimatedMinutes.toLong(), ChronoUnit.MINUTES)
         }
         TaskSchedulingMode.FIXED_DAY -> if (hasWindow) fixedEndAt.atZone(ZoneId.systemDefault()).toInstant() else null
         TaskSchedulingMode.FIXED_EXACT -> fixedEndAt.atZone(ZoneId.systemDefault()).toInstant()

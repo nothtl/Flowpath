@@ -176,6 +176,18 @@ class SchedulerEngine {
                         task.notBeforeAt ?: Instant.MIN,
                     )
                 }
+                task.schedulingMode == TaskSchedulingMode.FLEXIBLE_TIME && task.fixedStartAt != null -> {
+                    maxInstant(
+                        maxInstant(
+                            maxInstant(
+                                maxInstant(rangeStart, task.fixedStartAt),
+                                dependencyStartBoundary ?: Instant.MIN,
+                            ),
+                            timeframeStart ?: Instant.MIN,
+                        ),
+                        task.notBeforeAt ?: Instant.MIN,
+                    )
+                }
                 task.recurrenceRule.type != dev.codex.reclaimoss.domain.model.RecurrenceType.NONE -> {
                     val occurrenceStart = task.dueAt.atZone(zoneId).toLocalDate().atStartOfDay(zoneId).toInstant()
                     maxInstant(
@@ -467,6 +479,11 @@ class SchedulerEngine {
         if (timeframeStart != null && block.startAt < timeframeStart) return false
         if (timeframeEnd != null && block.endAt > timeframeEnd) return false
         if (task.schedulingMode == TaskSchedulingMode.FLEXIBLE && task.fixedStartAt != null && !taskHasDailyWindowConstraint(task, zoneId) && block.startAt < task.fixedStartAt) return false
+        if (task.schedulingMode == TaskSchedulingMode.FLEXIBLE_TIME && task.fixedStartAt != null) {
+            val blockTime = block.startAt.atZone(zoneId).toLocalTime()
+            val anchorTime = task.fixedStartAt.atZone(zoneId).toLocalTime()
+            if (blockTime != anchorTime) return false
+        }
         if (task.schedulingMode == TaskSchedulingMode.FLEXIBLE_WINDOW) {
             val windowStart = task.fixedStartAt ?: return false
             val windowEnd = task.fixedEndAt ?: task.dueAt
@@ -619,6 +636,21 @@ class SchedulerEngine {
                         allowTaskSplitting = effectiveAllowSplitting,
                         workHours = workHours,
                     )
+                } else if (task.schedulingMode == TaskSchedulingMode.FLEXIBLE_TIME && task.fixedStartAt != null) {
+                    // FLEXIBLE_TIME: pin to exact time-of-day on a flexible date.
+                    // For each day, compute the anchored start at the fixed time-of-day
+                    // and check if the full duration fits in a free segment.
+                    val anchorTime = task.fixedStartAt.atZone(zoneId).toLocalTime()
+                    val pinnedStart = ZonedDateTime.of(date, anchorTime, zoneId).toInstant()
+                    val pinnedEnd = pinnedStart.plus(task.estimatedMinutes.toLong(), ChronoUnit.MINUTES)
+                    val fits = preferredSegments.any { seg ->
+                        pinnedStart >= seg.startAt && pinnedEnd <= seg.endAt
+                    }
+                    if (fits) {
+                        BusyWindow(startAt = pinnedStart, endAt = pinnedEnd)
+                    } else {
+                        null
+                    }
                 } else {
                     // For fixed-start tasks: force anchor at cursor by only
                     // considering the first (earliest) segment. This ensures
@@ -990,7 +1022,7 @@ class SchedulerEngine {
     ): Boolean = task.dailyWindowConstraint(zoneId) != null
 
     private fun ScheduleTask.dailyWindowConstraint(zoneId: ZoneId): DailyWindowConstraint? {
-        if (schedulingMode == TaskSchedulingMode.FIXED_EXACT || schedulingMode == TaskSchedulingMode.FLEXIBLE_WINDOW) return null
+        if (schedulingMode == TaskSchedulingMode.FIXED_EXACT || schedulingMode == TaskSchedulingMode.FLEXIBLE_WINDOW || schedulingMode == TaskSchedulingMode.FLEXIBLE_TIME) return null
         val start = fixedStartAt ?: return null
         val end = fixedEndAt ?: return null
         val startLocal = start.atZone(zoneId)

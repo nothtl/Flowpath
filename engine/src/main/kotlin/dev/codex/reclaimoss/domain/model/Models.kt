@@ -73,6 +73,7 @@ enum class SchedulingIssueType {
 
 enum class TaskSchedulingMode {
     FLEXIBLE,
+    FLEXIBLE_TIME,
     FLEXIBLE_WINDOW,
     FIXED_DAY,
     FIXED_EXACT,

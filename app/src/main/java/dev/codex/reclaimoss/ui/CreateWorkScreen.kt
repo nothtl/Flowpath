@@ -78,6 +78,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -245,6 +246,11 @@ fun CreateWorkScreen(
                     it.recurrenceInterval,
                     it.recurrenceDays.joinToString(",") { day -> day.name },
                     it.firstOccurrence.toString(),
+                    it.dayOn,
+                    it.dayAfter,
+                    it.dayBy,
+                    it.hoursMode.name,
+                    it.hoursAtTime.toString(),
                 )
             },
             restore = { saved ->
@@ -253,6 +259,7 @@ fun CreateWorkScreen(
                 } else {
                     try {
                         val legacy = saved.size == 24
+                        val hasTabFields = saved.size >= 30
                         TaskDraft(
                             title = saved[0] as String,
                             description = saved[1] as String,
@@ -284,6 +291,12 @@ fun CreateWorkScreen(
                                 ?.map { DayOfWeek.valueOf(it) }
                                 ?.toSet()
                                 ?: emptySet(),
+                            recurrenceOccurrenceLimit = null,
+                            dayOn = if (hasTabFields) saved[25] as Boolean else false,
+                            dayAfter = if (hasTabFields) saved[26] as Boolean else false,
+                            dayBy = if (hasTabFields) saved[27] as Boolean else false,
+                            hoursMode = if (hasTabFields) HoursMode.valueOf(saved[28] as String) else HoursMode.ANY,
+                            hoursAtTime = if (hasTabFields) LocalTime.parse(saved[29] as String) else LocalTime.of(9, 0),
                         )
                     } catch (_: Exception) {
                         TaskDraft()
@@ -302,11 +315,11 @@ fun CreateWorkScreen(
     }
     var showScheduleRepeat by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showAdvancedOptions by rememberSaveable(sessionKey) { mutableStateOf(false) }
-    var showWhenSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
+    var showDaySheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
+    var showHoursSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showTimeWindowSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showSleepPlacedAfterSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showRepeatSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
-    var showDeadlineSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showPrioritySheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
     var showOverlapSheet by rememberSaveable(sessionKey) { mutableStateOf(false) }
 
@@ -442,9 +455,12 @@ fun CreateWorkScreen(
     ) {
         taskScheduleSummary(taskDraft)
     }
+    val needsAnchor = recurrenceNeedsAnchor(taskDraft.recurrenceType, taskDraft.recurrenceInterval, taskDraft.recurrenceDays)
+    val missingAnchor = needsAnchor && !taskDraft.dayOn && !taskDraft.dayAfter
     val canSaveTask = taskDraft.title.isNotBlank() &&
         (!taskDraft.hasWindow || taskDraft.fixedEndAt.isAfter(taskDraft.fixedStartAt)) &&
-        (taskDraft.recurrenceType != RecurrenceType.WEEKLY || taskDraft.recurrenceDays.isNotEmpty())
+        (taskDraft.recurrenceType != RecurrenceType.WEEKLY || taskDraft.recurrenceDays.isNotEmpty()) &&
+        !missingAnchor
 
     Box(
         modifier = Modifier
@@ -467,6 +483,27 @@ fun CreateWorkScreen(
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+            }
+        }
+
+        if (missingAnchor) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("⚠", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Set a start date in Day tab to anchor the recurrence",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
             }
         }
 
@@ -694,43 +731,21 @@ fun CreateWorkScreen(
                                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 
-                                    // Summary rows — each opens a bottom sheet
                                     SettingsSummaryRow(
-                                        title = "When",
-                                        summary = whenSummary(taskDraft),
-                                        onClick = { showWhenSheet = true },
+                                        title = "Day",
+                                        summary = daySummary(taskDraft),
+                                        onClick = { showDaySheet = true },
+                                    )
+                                    SettingsSummaryRow(
+                                        title = "Hours",
+                                        summary = hoursSummary(taskDraft),
+                                        onClick = { showHoursSheet = true },
                                     )
                                     if (!followUpMode && !rescheduleMode) {
                                         SettingsSummaryRow(
                                             title = "Repeat",
                                             summary = taskRepeatSummary(taskDraft),
                                             onClick = { showRepeatSheet = true },
-                                        )
-                                    }
-                                    if (taskDraft.schedulingMode == TaskSchedulingMode.FLEXIBLE) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Text("No deadline", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                                            Switch(
-                                                checked = !taskDraft.hasDeadline,
-                                                onCheckedChange = { enabled ->
-                                                    taskDraft = taskDraft.copy(
-                                                        hasDeadline = !enabled,
-                                                        repeatsForever = if (enabled && taskDraft.recurrenceType != RecurrenceType.NONE) true
-                                                            else if (!enabled && taskDraft.recurrenceType != RecurrenceType.NONE) false else taskDraft.repeatsForever,
-                                                    )
-                                                },
-                                            )
-                                        }
-                                    }
-                                    if (taskDraft.hasDeadline && taskDraft.schedulingMode == TaskSchedulingMode.FLEXIBLE) {
-                                        SettingsSummaryRow(
-                                            title = "Deadline",
-                                            summary = taskDraft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a")),
-                                            onClick = { showDeadlineSheet = true },
                                         )
                                     }
                                 }
@@ -849,134 +864,21 @@ fun CreateWorkScreen(
 
     // ── Popup Sheets ──
 
-    if (showWhenSheet) {
-        ModalBottomSheet(onDismissRequest = { showWhenSheet = false }) {
+    if (showDaySheet) {
+        ModalBottomSheet(onDismissRequest = { showDaySheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("When", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                SchedulingModeSection(
-                    schedulingMode = taskDraft.schedulingMode,
-                    onModeChanged = { newMode ->
-                        // Determine the anchor date from the current mode
-                        val anchorDate: LocalDate = when (taskDraft.schedulingMode) {
-                            TaskSchedulingMode.FLEXIBLE -> taskDraft.firstOccurrence.toLocalDate()
-                            TaskSchedulingMode.FLEXIBLE_WINDOW -> taskDraft.fixedStartAt.toLocalDate()
-                            TaskSchedulingMode.FIXED_DAY -> taskDraft.fixedDate
-                            TaskSchedulingMode.FIXED_EXACT -> taskDraft.fixedStartAt.toLocalDate()
-                        }
-                        // Preserve time-of-day from current fixedStartAt/fixedEndAt (or use defaults)
-                        val startTime: LocalTime = taskDraft.fixedStartAt.toLocalTime()
-                        val endTime: LocalTime = taskDraft.fixedEndAt.toLocalTime()
-                        taskDraft = taskDraft.copy(
-                            schedulingMode = newMode,
-                            hasWindow = if (newMode == TaskSchedulingMode.FLEXIBLE_WINDOW) taskDraft.hasWindow else false,
-                            hasDeadline = if (newMode == TaskSchedulingMode.FLEXIBLE) taskDraft.hasDeadline else true,
-                            firstOccurrence = when (newMode) {
-                                TaskSchedulingMode.FIXED_EXACT -> taskDraft.firstOccurrence // keep existing
-                                else -> LocalDateTime.of(anchorDate, taskDraft.firstOccurrence.toLocalTime())
-                            },
-                            fixedDate = when (newMode) {
-                                TaskSchedulingMode.FLEXIBLE_WINDOW -> anchorDate
-                                TaskSchedulingMode.FIXED_DAY -> anchorDate
-                                else -> taskDraft.fixedDate
-                            },
-                            fixedStartAt = when (newMode) {
-                                TaskSchedulingMode.FIXED_EXACT -> LocalDateTime.of(anchorDate, startTime)
-                                else -> LocalDateTime.of(anchorDate, startTime)
-                            },
-                            fixedEndAt = when (newMode) {
-                                TaskSchedulingMode.FIXED_EXACT -> LocalDateTime.of(anchorDate, startTime).plusMinutes(taskDraft.estimatedMinutes.toLong())
-                                else -> LocalDateTime.of(anchorDate, endTime)
-                            },
-                            deadline = when (newMode) {
-                                TaskSchedulingMode.FIXED_EXACT -> LocalDateTime.of(anchorDate, startTime).plusMinutes(taskDraft.estimatedMinutes.toLong())
-                                else -> taskDraft.deadline
-                            },
-                        )
-                    },
-                )
-                Spacer(Modifier.height(4.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                when (taskDraft.schedulingMode) {
-                    TaskSchedulingMode.FLEXIBLE -> {
-                        Text("After", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        DateTimeSection(
-                            title = "",
-                            dateTime = taskDraft.firstOccurrence,
-                            onDateTimeChanged = { taskDraft = taskDraft.copy(firstOccurrence = it) },
-                            context = context,
-                        )
-                    }
-                    TaskSchedulingMode.FLEXIBLE_WINDOW -> {
-                        DailyWindowConfigurator(
-                            hasWindow = true, canDisable = false,
-                            startTime = taskDraft.fixedStartAt.toLocalTime(),
-                            endTime = taskDraft.fixedEndAt.toLocalTime(),
-                            endsNextDay = taskDraft.fixedEndAt.toLocalTime() <= taskDraft.fixedStartAt.toLocalTime(),
-                            minimumWindowMinutes = taskDraft.estimatedMinutes,
-                            onWindowEnabledChanged = {},
-                            onWindowChanged = { start, end, overnight ->
-                                val anchorDate = taskDraft.firstOccurrence.toLocalDate()
-                                val endDate = if (overnight) anchorDate.plusDays(1) else anchorDate
-                                taskDraft = taskDraft.copy(
-                                    fixedStartAt = LocalDateTime.of(anchorDate, start),
-                                    fixedEndAt = LocalDateTime.of(endDate, end),
-                                )
-                            },
-                            context = context,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("Any date", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                            Switch(
-                                checked = !taskDraft.hasWindow,
-                                onCheckedChange = { anyDate ->
-                                    taskDraft = taskDraft.copy(hasWindow = !anyDate)
-                                },
-                            )
-                        }
-                        if (taskDraft.hasWindow) {
-                            Text("Date", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            DateTimeSection(
-                                title = "",
-                                dateTime = taskDraft.fixedDate.atStartOfDay(),
-                                onDateTimeChanged = { taskDraft = taskDraft.copy(fixedDate = it.toLocalDate()) },
-                                context = context,
-                                dateOnly = true,
-                            )
-                        }
-                    }
-                    TaskSchedulingMode.FIXED_DAY -> {
-                        Text("Date", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        DateTimeSection(
-                            title = "",
-                            dateTime = taskDraft.fixedDate.atStartOfDay(),
-                            onDateTimeChanged = { taskDraft = taskDraft.copy(fixedDate = it.toLocalDate()) },
-                            context = context,
-                            dateOnly = true,
-                        )
-                    }
-                    TaskSchedulingMode.FIXED_EXACT -> {
-                        Text("Start time", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        FixedTimeSection(
-                            recurrenceType = taskDraft.recurrenceType,
-                            dateTime = taskDraft.fixedStartAt,
-                            onDateTimeChanged = {
-                                val adjustedEnd = it.plusMinutes(taskDraft.estimatedMinutes.toLong())
-                                taskDraft = taskDraft.copy(fixedStartAt = it, fixedEndAt = adjustedEnd, deadline = adjustedEnd)
-                            },
-                            onTimeChanged = { selectedTime ->
-                                val adjustedStart = taskDraft.fixedStartAt.withHour(selectedTime.hour).withMinute(selectedTime.minute).withSecond(0).withNano(0)
-                                val adjustedEnd = adjustedStart.plusMinutes(taskDraft.estimatedMinutes.toLong())
-                                taskDraft = taskDraft.copy(fixedStartAt = adjustedStart, fixedEndAt = adjustedEnd, deadline = adjustedEnd)
-                            },
-                            context = context,
-                        )
-                    }
-                }
+                Text("Day", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                DayTabContent(taskDraft) { taskDraft = it }
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+
+    if (showHoursSheet) {
+        ModalBottomSheet(onDismissRequest = { showHoursSheet = false }) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("Hours", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                HoursTabContent(taskDraft) { taskDraft = it }
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -1023,7 +925,7 @@ fun CreateWorkScreen(
         }
     }
 
-    if (showRepeatSheet && !followUpMode && !rescheduleMode) {
+    if (showRepeatSheet) {
         ModalBottomSheet(onDismissRequest = { showRepeatSheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text("Repeat", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -1059,42 +961,6 @@ fun CreateWorkScreen(
                             context = context,
                         )
                     }
-                }
-                Spacer(Modifier.height(24.dp))
-            }
-        }
-    }
-
-    if (showDeadlineSheet) {
-        ModalBottomSheet(onDismissRequest = { showDeadlineSheet = false }) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Deadline", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                if (taskDraft.schedulingMode == TaskSchedulingMode.FLEXIBLE) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("No deadline")
-                        Switch(
-                            checked = !taskDraft.hasDeadline,
-                            onCheckedChange = { enabled ->
-                                taskDraft = taskDraft.copy(
-                                    hasDeadline = !enabled,
-                                    repeatsForever = if (enabled && taskDraft.recurrenceType != RecurrenceType.NONE) true
-                                        else if (!enabled && taskDraft.recurrenceType != RecurrenceType.NONE) false else taskDraft.repeatsForever,
-                                )
-                            },
-                        )
-                    }
-                }
-                if (taskDraft.hasDeadline) {
-                    DateTimeSection(
-                        title = "",
-                        dateTime = taskDraft.deadline,
-                        onDateTimeChanged = { taskDraft = taskDraft.copy(deadline = it) },
-                        context = context,
-                    )
                 }
                 Spacer(Modifier.height(24.dp))
             }
@@ -1414,7 +1280,7 @@ fun TaskScheduleEditor(
         },
     )
     when (draft.schedulingMode) {
-        TaskSchedulingMode.FLEXIBLE -> {
+        TaskSchedulingMode.FLEXIBLE, TaskSchedulingMode.FLEXIBLE_TIME -> {
             if (draft.hasDeadline) {
                 DateTimeSection(
                     title = "Deadline",
@@ -2436,7 +2302,7 @@ fun DeadlineSummaryCard(taskDraft: TaskDraft) {
             return@remember "No deadline"
         }
         when (taskDraft.schedulingMode) {
-            TaskSchedulingMode.FLEXIBLE -> DateTimeFormatter.ofPattern("EEE, MMM d • h:mm a").format(taskDraft.deadline)
+            TaskSchedulingMode.FLEXIBLE, TaskSchedulingMode.FLEXIBLE_TIME -> DateTimeFormatter.ofPattern("EEE, MMM d • h:mm a").format(taskDraft.deadline)
             TaskSchedulingMode.FLEXIBLE_WINDOW -> {
                 val dayFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
                 val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
@@ -2889,6 +2755,7 @@ private fun ScheduleTask.dependencyStartInstant(
     TaskSchedulingMode.FIXED_EXACT -> fixedStartAt ?: dueAt
     TaskSchedulingMode.FIXED_DAY -> fixedStartAt ?: dueAt.atZone(zoneId).toLocalDate().atStartOfDay(zoneId).toInstant()
     TaskSchedulingMode.FLEXIBLE,
+    TaskSchedulingMode.FLEXIBLE_TIME,
     TaskSchedulingMode.FLEXIBLE_WINDOW -> fixedStartAt ?: dueAt
 }
 
@@ -3086,21 +2953,265 @@ private fun WindowTimeField(
     }
 }
 
+@Composable
+private fun DayTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) {
+    val context = LocalContext.current
+    val showOn = !draft.dayAfter && !draft.dayBy
+    val showAfter = !draft.dayOn
+    val showBy = !draft.dayOn
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (showOn) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("On", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Switch(
+                    checked = draft.dayOn,
+                    onCheckedChange = { checked ->
+                        onDraftChange(draft.copy(dayOn = checked, dayAfter = false, dayBy = false))
+                    },
+                )
+            }
+            if (draft.dayOn) {
+                DateTimeSection(
+                    title = "",
+                    dateTime = draft.fixedDate.atStartOfDay(),
+                    onDateTimeChanged = { onDraftChange(draft.copy(fixedDate = it.toLocalDate())) },
+                    context = context,
+                    dateOnly = true,
+                )
+            }
+        }
+        if (showAfter) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("After", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Switch(
+                    checked = draft.dayAfter,
+                    onCheckedChange = { checked ->
+                        onDraftChange(draft.copy(dayAfter = checked, dayOn = false))
+                    },
+                )
+            }
+            if (draft.dayAfter) {
+                DateTimeSection(
+                    title = "",
+                    dateTime = draft.firstOccurrence,
+                    onDateTimeChanged = { onDraftChange(draft.copy(firstOccurrence = it)) },
+                    context = context,
+                )
+            }
+        }
+        if (showBy) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("By", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Switch(
+                    checked = draft.dayBy,
+                    onCheckedChange = { checked ->
+                        onDraftChange(draft.copy(dayBy = checked, dayOn = false))
+                    },
+                )
+            }
+            if (draft.dayBy) {
+                DateTimeSection(
+                    title = "",
+                    dateTime = draft.deadline,
+                    onDateTimeChanged = { onDraftChange(draft.copy(deadline = it)) },
+                    context = context,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HoursTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) {
+    val context = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Any time
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onDraftChange(draft.copy(hoursMode = HoursMode.ANY)) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(
+                selected = draft.hoursMode == HoursMode.ANY,
+                onClick = { onDraftChange(draft.copy(hoursMode = HoursMode.ANY)) },
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("Any time", style = MaterialTheme.typography.bodyMedium)
+        }
+        // Window
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onDraftChange(draft.copy(hoursMode = HoursMode.WINDOW)) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(
+                selected = draft.hoursMode == HoursMode.WINDOW,
+                onClick = { onDraftChange(draft.copy(hoursMode = HoursMode.WINDOW)) },
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("Window", style = MaterialTheme.typography.bodyMedium)
+        }
+        if (draft.hoursMode == HoursMode.WINDOW) {
+            DailyWindowConfigurator(
+                hasWindow = true, canDisable = false,
+                startTime = draft.fixedStartAt.toLocalTime(),
+                endTime = draft.fixedEndAt.toLocalTime(),
+                endsNextDay = draft.fixedEndAt.toLocalTime() <= draft.fixedStartAt.toLocalTime(),
+                minimumWindowMinutes = draft.estimatedMinutes,
+                onWindowEnabledChanged = {},
+                onWindowChanged = { start, end, overnight ->
+                    val anchorDate = draft.firstOccurrence.toLocalDate()
+                    val endDate = if (overnight) anchorDate.plusDays(1) else anchorDate
+                    onDraftChange(draft.copy(
+                        fixedStartAt = LocalDateTime.of(anchorDate, start),
+                        fixedEndAt = LocalDateTime.of(endDate, end),
+                    ))
+                },
+                context = context,
+            )
+        }
+        // At
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onDraftChange(draft.copy(hoursMode = HoursMode.AT)) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(
+                selected = draft.hoursMode == HoursMode.AT,
+                onClick = { onDraftChange(draft.copy(hoursMode = HoursMode.AT)) },
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("At", style = MaterialTheme.typography.bodyMedium)
+        }
+        if (draft.hoursMode == HoursMode.AT) {
+            TimeOnlySection(
+                title = "",
+                time = draft.hoursAtTime,
+                onTimeChanged = { onDraftChange(draft.copy(hoursAtTime = it)) },
+                context = context,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RepeatTabContent(draft: TaskDraft, missingAnchor: Boolean, onDraftChange: (TaskDraft) -> Unit) {
+    val context = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (missingAnchor) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+            ) {
+                Text(
+                    text = buildString {
+                        val typeLabel = when (draft.recurrenceType) {
+                            RecurrenceType.DAILY -> "Daily"
+                            RecurrenceType.WEEKLY -> "Weekly"
+                            RecurrenceType.MONTHLY -> "Monthly"
+                            else -> ""
+                        }
+                        append("$typeLabel every ${draft.recurrenceInterval}")
+                        append(if (draft.recurrenceInterval > 1) " days" else "")
+                        append(" needs a starting day — set On or After in Day")
+                    },
+                    modifier = Modifier.padding(12.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+        }
+        RecurrenceSection(
+            recurrenceType = draft.recurrenceType,
+            recurrenceDays = draft.recurrenceDays,
+            onTypeChanged = { type ->
+                onDraftChange(draft.copy(
+                    recurrenceType = type,
+                    recurrenceDays = if (type == RecurrenceType.WEEKLY) draft.recurrenceDays else emptySet(),
+                    repeatsForever = if (type == RecurrenceType.NONE) draft.repeatsForever else (draft.repeatsForever || !draft.hasDeadline),
+                ))
+            },
+            recurrenceInterval = draft.recurrenceInterval,
+            onIntervalChanged = { onDraftChange(draft.copy(recurrenceInterval = it)) },
+            disabledTypes = emptySet(),
+            onDayToggle = { onDraftChange(draft.copy(recurrenceDays = draft.recurrenceDays.toggleForCreate(it))) },
+        )
+        if (draft.recurrenceType != RecurrenceType.NONE && draft.hasDeadline) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Repeats forever")
+                Switch(checked = draft.repeatsForever, onCheckedChange = { onDraftChange(draft.copy(repeatsForever = it)) })
+            }
+            if (!draft.repeatsForever) {
+                DateTimeSection(
+                    title = "Repeat until",
+                    dateTime = draft.deadline,
+                    onDateTimeChanged = { onDraftChange(draft.copy(deadline = it)) },
+                    context = context,
+                )
+            }
+        }
+    }
+}
+
+private fun daySummary(draft: TaskDraft): String = when {
+    draft.dayOn -> "On ${draft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}"
+    draft.dayAfter && draft.dayBy -> "After ${draft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))} · By ${draft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))}"
+    draft.dayAfter -> "After ${draft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))}"
+    draft.dayBy -> "By ${draft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))}"
+    else -> "Any day"
+}
+
+private fun hoursSummary(draft: TaskDraft): String = when (draft.hoursMode) {
+    HoursMode.ANY -> "Any time"
+    HoursMode.WINDOW -> {
+        val start = draft.fixedStartAt.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a"))
+        val end = draft.fixedEndAt.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a"))
+        "$start – $end"
+    }
+    HoursMode.AT -> draft.hoursAtTime.format(DateTimeFormatter.ofPattern("h:mm a"))
+}
+
 fun whenSummary(taskDraft: TaskDraft): String {
+    val deadlineSuffix = if (taskDraft.hasDeadline &&
+        (taskDraft.schedulingMode == TaskSchedulingMode.FLEXIBLE || taskDraft.schedulingMode == TaskSchedulingMode.FLEXIBLE_WINDOW)
+    ) {
+        " · by " + taskDraft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))
+    } else ""
+
     return when (taskDraft.schedulingMode) {
-        TaskSchedulingMode.FLEXIBLE -> {
+        TaskSchedulingMode.FLEXIBLE, TaskSchedulingMode.FLEXIBLE_TIME -> {
             val after = taskDraft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))
-            "Anytime after $after"
+            "Anytime after $after$deadlineSuffix"
         }
         TaskSchedulingMode.FLEXIBLE_WINDOW -> {
             val start = taskDraft.fixedStartAt.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a"))
             val end = taskDraft.fixedEndAt.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm a"))
-            if (taskDraft.hasWindow) {
-                val date = taskDraft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d"))
-                "$date, $start – $end"
+            val prefix = if (taskDraft.hasWindow) {
+                taskDraft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d")) + ", "
             } else {
-                "Daily $start – $end"
+                "Daily "
             }
+            "$prefix$start – $end$deadlineSuffix"
         }
         TaskSchedulingMode.FIXED_DAY -> {
             val date = taskDraft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
@@ -3116,7 +3227,7 @@ fun whenSummary(taskDraft: TaskDraft): String {
 fun taskScheduleSummary(taskDraft: TaskDraft): String {
     val duration = taskDraft.estimatedMinutes.durationLabelForCreate()
     return when (taskDraft.schedulingMode) {
-        TaskSchedulingMode.FLEXIBLE -> {
+        TaskSchedulingMode.FLEXIBLE, TaskSchedulingMode.FLEXIBLE_TIME -> {
             if (!taskDraft.hasDeadline) {
                 "Flexible | No deadline | $duration"
             } else {
@@ -3139,7 +3250,7 @@ fun taskScheduleSummary(taskDraft: TaskDraft): String {
 }
 
 fun taskScheduleRowSummary(taskDraft: TaskDraft): String = when (taskDraft.schedulingMode) {
-    TaskSchedulingMode.FLEXIBLE -> {
+    TaskSchedulingMode.FLEXIBLE, TaskSchedulingMode.FLEXIBLE_TIME -> {
         if (!taskDraft.hasDeadline) {
             "Flexible, No deadline"
         } else {
@@ -3274,6 +3385,7 @@ private fun TaskDraft.resolvedOverlapPolicy(allowConcurrentTasks: Boolean): Task
 private fun TaskSchedulingMode.labelForCreate(): String =
     when (this) {
         TaskSchedulingMode.FLEXIBLE -> "Anytime"
+        TaskSchedulingMode.FLEXIBLE_TIME -> "At time"
         TaskSchedulingMode.FLEXIBLE_WINDOW -> "Time window"
         TaskSchedulingMode.FIXED_DAY -> "Fixed date"
         TaskSchedulingMode.FIXED_EXACT -> "Fixed time"
