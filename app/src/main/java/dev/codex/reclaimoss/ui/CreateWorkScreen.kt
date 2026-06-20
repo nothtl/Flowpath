@@ -78,7 +78,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -2966,7 +2965,7 @@ private fun DayTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("On", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Fixed date", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Switch(
                     checked = draft.dayOn,
                     onCheckedChange = { checked ->
@@ -2990,7 +2989,7 @@ private fun DayTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("After", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Start after", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Switch(
                     checked = draft.dayAfter,
                     onCheckedChange = { checked ->
@@ -3013,7 +3012,7 @@ private fun DayTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("By", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Due by", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Switch(
                     checked = draft.dayBy,
                     onCheckedChange = { checked ->
@@ -3037,33 +3036,19 @@ private fun DayTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) 
 private fun HoursTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) {
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Any time
+        // Time range
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onDraftChange(draft.copy(hoursMode = HoursMode.ANY)) },
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RadioButton(
-                selected = draft.hoursMode == HoursMode.ANY,
-                onClick = { onDraftChange(draft.copy(hoursMode = HoursMode.ANY)) },
+            Text("Time range", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Switch(
+                checked = draft.hoursMode == HoursMode.WINDOW,
+                onCheckedChange = { checked ->
+                    onDraftChange(draft.copy(hoursMode = if (checked) HoursMode.WINDOW else HoursMode.ANY))
+                },
             )
-            Spacer(Modifier.width(8.dp))
-            Text("Any time", style = MaterialTheme.typography.bodyMedium)
-        }
-        // Window
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onDraftChange(draft.copy(hoursMode = HoursMode.WINDOW)) },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            RadioButton(
-                selected = draft.hoursMode == HoursMode.WINDOW,
-                onClick = { onDraftChange(draft.copy(hoursMode = HoursMode.WINDOW)) },
-            )
-            Spacer(Modifier.width(8.dp))
-            Text("Window", style = MaterialTheme.typography.bodyMedium)
         }
         if (draft.hoursMode == HoursMode.WINDOW) {
             DailyWindowConfigurator(
@@ -3084,19 +3069,19 @@ private fun HoursTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit
                 context = context,
             )
         }
-        // At
+        // Fixed time
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onDraftChange(draft.copy(hoursMode = HoursMode.AT)) },
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RadioButton(
-                selected = draft.hoursMode == HoursMode.AT,
-                onClick = { onDraftChange(draft.copy(hoursMode = HoursMode.AT)) },
+            Text("Fixed time", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Switch(
+                checked = draft.hoursMode == HoursMode.AT,
+                onCheckedChange = { checked ->
+                    onDraftChange(draft.copy(hoursMode = if (checked) HoursMode.AT else HoursMode.ANY))
+                },
             )
-            Spacer(Modifier.width(8.dp))
-            Text("At", style = MaterialTheme.typography.bodyMedium)
         }
         if (draft.hoursMode == HoursMode.AT) {
             TimeOnlySection(
@@ -3174,10 +3159,10 @@ private fun RepeatTabContent(draft: TaskDraft, missingAnchor: Boolean, onDraftCh
 }
 
 private fun daySummary(draft: TaskDraft): String = when {
-    draft.dayOn -> "On ${draft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}"
-    draft.dayAfter && draft.dayBy -> "After ${draft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))} · By ${draft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))}"
-    draft.dayAfter -> "After ${draft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))}"
-    draft.dayBy -> "By ${draft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))}"
+    draft.dayOn -> "Fixed date: ${draft.fixedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}"
+    draft.dayAfter && draft.dayBy -> "Start after ${draft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))} · Due by ${draft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))}"
+    draft.dayAfter -> "Start after ${draft.firstOccurrence.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))}"
+    draft.dayBy -> "Due by ${draft.deadline.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))}"
     else -> "Any day"
 }
 
