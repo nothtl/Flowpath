@@ -51,10 +51,12 @@ import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -488,15 +490,19 @@ fun CreateWorkScreen(
         if (missingAnchor) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.errorContainer,
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("⚠", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.width(10.dp))
+                    Icon(
+                        Icons.Outlined.Warning,
+                        contentDescription = "Warning",
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.width(12.dp))
                     Text(
                         "Set a start date in Day tab to anchor the recurrence",
                         style = MaterialTheme.typography.bodyMedium,
@@ -579,7 +585,7 @@ fun CreateWorkScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text("Schedule & Repeat", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    Text("Schedule & Repeat", style = MaterialTheme.typography.titleSmall)
                                     Icon(
                                         Icons.Outlined.ChevronRight,
                                         contentDescription = null,
@@ -670,17 +676,21 @@ fun CreateWorkScreen(
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = MaterialTheme.shapes.small,
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
                             ),
                         ) {
                             Row(
                                 modifier = Modifier.padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text("⚠", style = MaterialTheme.typography.titleMedium)
-                                Spacer(Modifier.width(10.dp))
+                                Icon(
+                                    Icons.Outlined.Warning,
+                                    contentDescription = "Warning",
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                                Spacer(Modifier.width(12.dp))
                                 Text(
                                     sleepOverlapWarning,
                                     style = MaterialTheme.typography.bodySmall,
@@ -714,7 +724,7 @@ fun CreateWorkScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text("Schedule & Repeat", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    Text("Schedule & Repeat", style = MaterialTheme.typography.titleSmall)
                                     Icon(
                                         Icons.Outlined.ChevronRight,
                                         contentDescription = null,
@@ -774,7 +784,7 @@ fun CreateWorkScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text("Rules", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    Text("Rules", style = MaterialTheme.typography.titleSmall)
                                     Icon(
                                         Icons.Outlined.ChevronRight,
                                         contentDescription = null,
@@ -2506,7 +2516,7 @@ fun TimeframeDropdown(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                Text("v", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         DropdownMenu(
@@ -2680,7 +2690,7 @@ private fun <T> DependencyDropdown(
                         color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text("v", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         DropdownMenu(
@@ -2855,7 +2865,7 @@ fun RecurrenceSection(
         ) {
             Text("Every", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedButton(onClick = { if (recurrenceInterval > 1) onIntervalChanged(recurrenceInterval - 1) }) { Text("-") }
-            Text(recurrenceInterval.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(recurrenceInterval.toString(), style = MaterialTheme.typography.titleMedium)
             OutlinedButton(onClick = { onIntervalChanged((recurrenceInterval + 1).coerceAtMost(30)) }) { Text("+") }
             Text(
                 when (recurrenceType) {
@@ -2965,7 +2975,7 @@ private fun DayTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Fixed date", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Fixed date", style = MaterialTheme.typography.titleMedium)
                 Switch(
                     checked = draft.dayOn,
                     onCheckedChange = { checked ->
@@ -2989,7 +2999,7 @@ private fun DayTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Start after", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Start after", style = MaterialTheme.typography.titleMedium)
                 Switch(
                     checked = draft.dayAfter,
                     onCheckedChange = { checked ->
@@ -3012,7 +3022,7 @@ private fun DayTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Due by", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Due by", style = MaterialTheme.typography.titleMedium)
                 Switch(
                     checked = draft.dayBy,
                     onCheckedChange = { checked ->
@@ -3042,7 +3052,7 @@ private fun HoursTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Time range", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Time range", style = MaterialTheme.typography.titleMedium)
             Switch(
                 checked = draft.hoursMode == HoursMode.WINDOW,
                 onCheckedChange = { checked ->
@@ -3075,7 +3085,7 @@ private fun HoursTabContent(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Fixed time", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Fixed time", style = MaterialTheme.typography.titleMedium)
             Switch(
                 checked = draft.hoursMode == HoursMode.AT,
                 onCheckedChange = { checked ->
@@ -3101,8 +3111,8 @@ private fun RepeatTabContent(draft: TaskDraft, missingAnchor: Boolean, onDraftCh
         if (missingAnchor) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.errorContainer,
             ) {
                 Text(
                     text = buildString {

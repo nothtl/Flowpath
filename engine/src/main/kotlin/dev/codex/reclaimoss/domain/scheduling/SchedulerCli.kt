@@ -285,21 +285,21 @@ fun main() {
     assert("No-split: single continuous or partial", blocks19.size <= 1 || total19 < 480,
         "blocks=${blocks19.size} total=$total19")
 
-    // ─── 20. Zero-minute task ──
+    // ─── 20. Zero-minute task (placed outside sleep) ──
     println("\n── 20. Zero-minute blocker creates block ──")
     val plan20 = schedule(tz, listOf(
         sleepTask("sleep", t("2026-06-10T22:00"), t("2026-06-11T06:00")),
         ScheduleTask(id = "zero", title = "", taskKind = TaskKind.BLOCKER, priority = TaskPriority.HIGH,
             hasDeadline = false, allowSplitting = true,
             schedulingMode = TaskSchedulingMode.FIXED_EXACT,
-            fixedStartAt = t("2026-06-10T22:30"), fixedEndAt = t("2026-06-10T23:00"),
-            dueAt = t("2026-06-10T23:00"), estimatedMinutes = 0, remainingMinutes = 0,
+            fixedStartAt = t("2026-06-10T21:00"), fixedEndAt = t("2026-06-10T21:30"),
+            dueAt = t("2026-06-10T21:30"), estimatedMinutes = 0, remainingMinutes = 0,
             overlapPolicy = TaskOverlapPolicy.DISALLOW, status = TaskStatus.ACTIVE),
     ), allowConcurrent = true)
     val zeroBlock = plan20.blocks.firstOrNull { it.taskId == "zero" }
     assert("Zero-min blocker creates block", zeroBlock != null, "blocker has no block")
     assert("Zero-min blocker at correct time", zeroBlock != null &&
-        zeroBlock.startAt == t("2026-06-10T22:30") && zeroBlock.endAt == t("2026-06-10T23:00"))
+        zeroBlock.startAt == t("2026-06-10T21:00") && zeroBlock.endAt == t("2026-06-10T21:30"))
 
     // ── BLOCKER EDGE CASE TESTS ──
     println("\n" + "═".repeat(50))
@@ -2036,11 +2036,17 @@ fun main() {
         normTask("A", null, 60, false, t("2026-07-10T17:00")),
     ))
 
+    // ── Run combination tests ──
+    CombinationTests.run(tz, ::assert, ::schedule, ::scheduleWithHours,
+        ::sleepTask, ::normTask, ::overlaps, ::overlapsAny)
+
     // ── SUMMARY ──
+    val finalPass = pass + CombinationTests.extraPass
+    val finalFail = fail + CombinationTests.extraFail
     println("\n" + "═".repeat(50))
-    println("RESULTS: $pass passed, $fail failed, ${pass + fail} total")
+    println("RESULTS: $finalPass passed, $finalFail failed, ${finalPass + finalFail} total")
     println("═".repeat(50))
-    if (fail > 0) kotlin.system.exitProcess(1)
+    if (finalFail > 0) kotlin.system.exitProcess(1)
 }
 
 // ── Helpers ──

@@ -420,7 +420,7 @@ fun OpenReclaimApp(appGraph: AppGraph) {
                     IconButton(onClick = { showingBlockerSheet = false }) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
                     }
-                    Text("Add Blocker", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Add Blocker", style = MaterialTheme.typography.titleLarge)
                 }
 
                 OutlinedTextField(
@@ -472,7 +472,7 @@ fun OpenReclaimApp(appGraph: AppGraph) {
         if (showBlockerStartSheet) {
             ModalBottomSheet(onDismissRequest = { showBlockerStartSheet = false }) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("Start", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Start", style = MaterialTheme.typography.titleLarge)
                     DateTimeSection(
                         title = "",
                         dateTime = blockerStartDate.atTime(blockerStartTime),
@@ -490,7 +490,7 @@ fun OpenReclaimApp(appGraph: AppGraph) {
         if (showBlockerEndSheet) {
             ModalBottomSheet(onDismissRequest = { showBlockerEndSheet = false }) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("End", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("End", style = MaterialTheme.typography.titleLarge)
                     DateTimeSection(
                         title = "",
                         dateTime = blockerEndDate.atTime(blockerEndTime),

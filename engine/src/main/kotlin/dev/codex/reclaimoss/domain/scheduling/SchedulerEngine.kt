@@ -714,14 +714,16 @@ class SchedulerEngine {
         taskBlocks.forEach { block ->
             val window = BusyWindow(block.startAt, block.endAt)
             val otherTask = tasksById[block.taskId]
-            val blockerAndSleep = otherTask != null && (
-                (task.taskKind == TaskKind.SLEEP && otherTask.taskKind == TaskKind.BLOCKER) ||
-                (task.taskKind == TaskKind.BLOCKER && otherTask.taskKind == TaskKind.SLEEP)
-            )
-            if (blockerAndSleep || (otherTask != null && tasksCanOverlap(task, otherTask, allowConcurrentTasks))) {
-                softTaskWindows += window
-            } else {
+            if (otherTask != null && otherTask.taskKind == TaskKind.SLEEP && task.taskKind != TaskKind.SLEEP) {
                 blockingTaskWindows += window
+            } else {
+                val blockerAndSleep = otherTask != null &&
+                    task.taskKind == TaskKind.SLEEP && otherTask.taskKind == TaskKind.BLOCKER
+                if (blockerAndSleep || (otherTask != null && tasksCanOverlap(task, otherTask, allowConcurrentTasks))) {
+                    softTaskWindows += window
+                } else {
+                    blockingTaskWindows += window
+                }
             }
         }
         return Pair(

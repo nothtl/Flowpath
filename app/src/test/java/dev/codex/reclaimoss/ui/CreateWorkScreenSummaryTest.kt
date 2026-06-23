@@ -494,6 +494,269 @@ class CreateWorkScreenSummaryTest {
         assertEquals("Tue, Jun 2 6:00 PM | Once", summary)
     }
 
+    // ── computeSchedulingMode ──
+
+    @Test
+    fun `computeSchedulingMode - nothing selected is FLEXIBLE`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = false, dayBy = false, hoursMode = HoursMode.ANY)
+        assertEquals(TaskSchedulingMode.FLEXIBLE, draft.computeSchedulingMode())
+    }
+
+    @Test
+    fun `computeSchedulingMode - Fixed date only is FIXED_DAY`() {
+        val draft = TaskDraft(dayOn = true, dayAfter = false, dayBy = false, hoursMode = HoursMode.ANY)
+        assertEquals(TaskSchedulingMode.FIXED_DAY, draft.computeSchedulingMode())
+    }
+
+    @Test
+    fun `computeSchedulingMode - Fixed date + Window is FLEXIBLE_WINDOW`() {
+        val draft = TaskDraft(dayOn = true, dayAfter = false, dayBy = false, hoursMode = HoursMode.WINDOW)
+        assertEquals(TaskSchedulingMode.FLEXIBLE_WINDOW, draft.computeSchedulingMode())
+    }
+
+    @Test
+    fun `computeSchedulingMode - Fixed date + At is FIXED_EXACT`() {
+        val draft = TaskDraft(dayOn = true, dayAfter = false, dayBy = false, hoursMode = HoursMode.AT)
+        assertEquals(TaskSchedulingMode.FIXED_EXACT, draft.computeSchedulingMode())
+    }
+
+    @Test
+    fun `computeSchedulingMode - At with no date is FLEXIBLE_TIME`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = false, dayBy = false, hoursMode = HoursMode.AT)
+        assertEquals(TaskSchedulingMode.FLEXIBLE_TIME, draft.computeSchedulingMode())
+    }
+
+    @Test
+    fun `computeSchedulingMode - At with After is FLEXIBLE_TIME`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = true, dayBy = false, hoursMode = HoursMode.AT)
+        assertEquals(TaskSchedulingMode.FLEXIBLE_TIME, draft.computeSchedulingMode())
+    }
+
+    @Test
+    fun `computeSchedulingMode - Window only is FLEXIBLE_WINDOW`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = false, dayBy = false, hoursMode = HoursMode.WINDOW)
+        assertEquals(TaskSchedulingMode.FLEXIBLE_WINDOW, draft.computeSchedulingMode())
+    }
+
+    @Test
+    fun `computeSchedulingMode - After+By with Any time is FLEXIBLE`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = true, dayBy = true, hoursMode = HoursMode.ANY)
+        assertEquals(TaskSchedulingMode.FLEXIBLE, draft.computeSchedulingMode())
+    }
+
+    // ── recurrenceNeedsAnchor ──
+
+    @Test
+    fun `recurrenceNeedsAnchor - None never needs anchor`() {
+        assertEquals(false, recurrenceNeedsAnchor(RecurrenceType.NONE, 1, emptySet()))
+    }
+
+    @Test
+    fun `recurrenceNeedsAnchor - Daily interval 1 does not need anchor`() {
+        assertEquals(false, recurrenceNeedsAnchor(RecurrenceType.DAILY, 1, emptySet()))
+    }
+
+    @Test
+    fun `recurrenceNeedsAnchor - Daily interval 2 needs anchor`() {
+        assertEquals(true, recurrenceNeedsAnchor(RecurrenceType.DAILY, 2, emptySet()))
+    }
+
+    @Test
+    fun `recurrenceNeedsAnchor - Daily interval 3 needs anchor`() {
+        assertEquals(true, recurrenceNeedsAnchor(RecurrenceType.DAILY, 3, emptySet()))
+    }
+
+    @Test
+    fun `recurrenceNeedsAnchor - Weekly with days and interval 1 does not need anchor`() {
+        assertEquals(false, recurrenceNeedsAnchor(RecurrenceType.WEEKLY, 1, setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY)))
+    }
+
+    @Test
+    fun `recurrenceNeedsAnchor - Weekly with no days needs anchor`() {
+        assertEquals(true, recurrenceNeedsAnchor(RecurrenceType.WEEKLY, 1, emptySet()))
+    }
+
+    @Test
+    fun `recurrenceNeedsAnchor - Weekly interval 2 needs anchor`() {
+        assertEquals(true, recurrenceNeedsAnchor(RecurrenceType.WEEKLY, 2, setOf(DayOfWeek.MONDAY)))
+    }
+
+    @Test
+    fun `recurrenceNeedsAnchor - Monthly always needs anchor`() {
+        assertEquals(true, recurrenceNeedsAnchor(RecurrenceType.MONTHLY, 1, emptySet()))
+        assertEquals(true, recurrenceNeedsAnchor(RecurrenceType.MONTHLY, 2, emptySet()))
+    }
+
+    // ── hasDeadline from tabs ──
+
+    @Test
+    fun `hasDeadline is true when dayBy`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = false, dayBy = true)
+        assertEquals(true, draft.dayBy || draft.dayOn)
+    }
+
+    @Test
+    fun `hasDeadline is true when dayOn`() {
+        val draft = TaskDraft(dayOn = true, dayAfter = false, dayBy = false)
+        assertEquals(true, draft.dayBy || draft.dayOn)
+    }
+
+    @Test
+    fun `hasDeadline is false when nothing checked`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = false, dayBy = false)
+        assertEquals(false, draft.dayBy || draft.dayOn)
+    }
+
+    @Test
+    fun `hasDeadline is false when only dayAfter`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = true, dayBy = false)
+        assertEquals(false, draft.dayBy || draft.dayOn)
+    }
+
+    // ── listSaver round-trip for new tab fields ──
+
+    @Test
+    fun `listSaver round-trip preserves new tab fields`() {
+        val draft = TaskDraft(
+            dayOn = true,
+            dayAfter = false,
+            dayBy = false,
+            hoursMode = HoursMode.AT,
+            hoursAtTime = LocalTime.of(14, 30),
+            fixedDate = LocalDate.of(2026, 6, 20),
+        )
+        // Simulate what listSaver.save produces (index 25-29 are tab fields)
+        val saved = listOf(
+            draft.title, draft.description, draft.priority.name,
+            draft.preferredTimePeriodId ?: "", draft.timeframeId ?: "",
+            draft.hasDeadline, draft.continuationParentTaskId ?: "",
+            draft.continuationMode?.name ?: "", draft.noGap.toString(),
+            draft.overlapPolicy.name, draft.allowSplitting,
+            draft.deadline.toString(), draft.schedulingMode.name,
+            draft.hasWindow, draft.startDate?.toString() ?: "",
+            draft.fixedDate.toString(), draft.fixedStartAt.toString(),
+            draft.fixedEndAt.toString(), draft.repeatsForever,
+            draft.estimatedMinutes, draft.addReminder,
+            draft.recurrenceType.name, draft.recurrenceInterval,
+            draft.recurrenceDays.joinToString(",") { day -> day.name },
+            draft.firstOccurrence.toString(),
+            draft.dayOn, draft.dayAfter, draft.dayBy,
+            draft.hoursMode.name, draft.hoursAtTime.toString(),
+        )
+        assertEquals(30, saved.size)
+
+        // Simulate restore
+        val restored = TaskDraft(
+            title = saved[0] as String,
+            description = saved[1] as String,
+            priority = TaskPriority.valueOf(saved[2] as String),
+            preferredTimePeriodId = (saved[3] as String).ifBlank { null },
+            timeframeId = (saved[4] as String).ifBlank { null },
+            hasDeadline = saved[5] as Boolean,
+            continuationParentTaskId = (saved[6] as String).ifBlank { null },
+            continuationMode = (saved[7] as String).ifBlank { null }?.let { TaskContinuationMode.valueOf(it) },
+            noGap = (saved[8] as String).toBooleanStrict(),
+            overlapPolicy = TaskOverlapPolicy.valueOf(saved[9] as String),
+            allowSplitting = saved[10] as Boolean,
+            firstOccurrence = LocalDateTime.parse(saved[24] as String),
+            deadline = LocalDateTime.parse(saved[11] as String),
+            schedulingMode = TaskSchedulingMode.valueOf(saved[12] as String),
+            hasWindow = saved[13] as Boolean,
+            startDate = (saved[14] as String).ifBlank { null }?.let { LocalDate.parse(it) },
+            fixedDate = LocalDate.parse(saved[15] as String),
+            fixedStartAt = LocalDateTime.parse(saved[16] as String),
+            fixedEndAt = LocalDateTime.parse(saved[17] as String),
+            repeatsForever = saved[18] as Boolean,
+            estimatedMinutes = saved[19] as Int,
+            addReminder = saved[20] as Boolean,
+            recurrenceType = RecurrenceType.valueOf(saved[21] as String),
+            recurrenceInterval = saved[22] as Int,
+            recurrenceDays = (saved[23] as String).takeIf { it.isNotBlank() }?.split(",")?.map { DayOfWeek.valueOf(it) }?.toSet() ?: emptySet(),
+            dayOn = saved[25] as Boolean,
+            dayAfter = saved[26] as Boolean,
+            dayBy = saved[27] as Boolean,
+            hoursMode = HoursMode.valueOf(saved[28] as String),
+            hoursAtTime = LocalTime.parse(saved[29] as String),
+        )
+
+        assertEquals(draft.dayOn, restored.dayOn)
+        assertEquals(draft.dayAfter, restored.dayAfter)
+        assertEquals(draft.dayBy, restored.dayBy)
+        assertEquals(draft.hoursMode, restored.hoursMode)
+        assertEquals(draft.hoursAtTime, restored.hoursAtTime)
+        assertEquals(draft.fixedDate, restored.fixedDate)
+    }
+
+    // ── Day / Hours mutual exclusion logic ──
+
+    @Test
+    fun `dayOn hides After and By`() {
+        val draft = TaskDraft(dayOn = true, dayAfter = false, dayBy = false)
+        val showOn = !draft.dayAfter && !draft.dayBy
+        val showAfter = !draft.dayOn
+        val showBy = !draft.dayOn
+        assertTrue(showOn)
+        assertEquals(false, showAfter)
+        assertEquals(false, showBy)
+    }
+
+    @Test
+    fun `dayAfter hides On`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = true, dayBy = false)
+        val showOn = !draft.dayAfter && !draft.dayBy
+        val showAfter = !draft.dayOn
+        val showBy = !draft.dayOn
+        assertEquals(false, showOn) // After is checked → On hidden
+        assertTrue(showAfter)
+        assertTrue(showBy)
+    }
+
+    @Test
+    fun `dayBy hides On`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = false, dayBy = true)
+        val showOn = !draft.dayAfter && !draft.dayBy
+        assertEquals(false, showOn)
+    }
+
+    @Test
+    fun `dayAfter and dayBy coexist`() {
+        val draft = TaskDraft(dayOn = false, dayAfter = true, dayBy = true)
+        val showOn = !draft.dayAfter && !draft.dayBy
+        val showAfter = !draft.dayOn
+        val showBy = !draft.dayOn
+        assertEquals(false, showOn)
+        assertTrue(showAfter)
+        assertTrue(showBy)
+    }
+
+    // ── missingAnchor logic ──
+
+    @Test
+    fun `missingAnchor true when daily every 2 days and no start date`() {
+        val needsAnchor = recurrenceNeedsAnchor(RecurrenceType.DAILY, 2, emptySet())
+        val hasStartDate = false // !dayOn && !dayAfter
+        assertEquals(true, needsAnchor && !hasStartDate)
+    }
+
+    @Test
+    fun `missingAnchor false when daily every 2 days but dayOn set`() {
+        val needsAnchor = recurrenceNeedsAnchor(RecurrenceType.DAILY, 2, emptySet())
+        val hasStartDate = true // dayOn = true
+        assertEquals(false, needsAnchor && !hasStartDate)
+    }
+
+    @Test
+    fun `missingAnchor false when daily interval 1`() {
+        val needsAnchor = recurrenceNeedsAnchor(RecurrenceType.DAILY, 1, emptySet())
+        assertEquals(false, needsAnchor)
+    }
+
+    @Test
+    fun `missingAnchor false when recurrence is NONE`() {
+        val needsAnchor = recurrenceNeedsAnchor(RecurrenceType.NONE, 1, emptySet())
+        assertEquals(false, needsAnchor)
+    }
+
     private fun <T> withLocale(locale: Locale, block: () -> T): T {
         val previous = Locale.getDefault()
         Locale.setDefault(locale)

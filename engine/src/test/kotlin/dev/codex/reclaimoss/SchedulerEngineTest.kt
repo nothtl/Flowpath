@@ -1229,6 +1229,175 @@ class SchedulerEngineTest {
             scheduled.startAt >= busy.single().endAt || scheduled.endAt <= busy.single().startAt)
     }
 
+    // ── FLEXIBLE_TIME tests ──
+
+    @Test
+    fun `FLEXIBLE_TIME places at exact time-of-day on flexible date`() {
+        val start = ZonedDateTime.of(LocalDate.of(2026, 5, 18), LocalTime.of(8, 0), zone).toInstant()
+        val fixedTime = ZonedDateTime.of(LocalDate.of(2026, 5, 19), LocalTime.of(14, 0), zone).toInstant()
+        val task = task(
+            id = "ft-1",
+            deadline = ZonedDateTime.of(LocalDate.of(2026, 5, 25), LocalTime.of(17, 0), zone).toInstant(),
+            estimatedMinutes = 60,
+            remainingMinutes = 60,
+            priority = TaskPriority.MEDIUM,
+            schedulingMode = TaskSchedulingMode.FLEXIBLE_TIME,
+            fixedStartAt = fixedTime,
+            fixedEndAt = fixedTime.plusSeconds(3600),
+        )
+
+        val plan = scheduler.rebuildSchedule(
+            tasks = listOf(task),
+            existingBlocks = emptyList(),
+            busyWindows = emptyList(),
+            workHours = workHours,
+            timePeriods = timePeriods,
+            policy = policy,
+            rangeStart = start,
+            reason = ScheduleRebuildReason.ManualRebuild,
+        )
+
+        val block = plan.blocks.single { it.taskId == task.id }
+        val blockTime = block.startAt.atZone(zone).toLocalTime()
+        assertEquals(LocalTime.of(14, 0), blockTime)
+        val blockMinutes = java.time.Duration.between(block.startAt, block.endAt).toMinutes().toInt()
+        assertEquals(60, blockMinutes)
+    }
+
+    @Test
+    fun `FLEXIBLE_TIME skips day when slot is busy and moves to next available day`() {
+        val start = ZonedDateTime.of(LocalDate.of(2026, 5, 18), LocalTime.of(8, 0), zone).toInstant()
+        val fixedTime = ZonedDateTime.of(LocalDate.of(2026, 5, 18), LocalTime.of(14, 0), zone).toInstant()
+        val task = task(
+            id = "ft-2",
+            deadline = ZonedDateTime.of(LocalDate.of(2026, 5, 22), LocalTime.of(17, 0), zone).toInstant(),
+            estimatedMinutes = 60,
+            remainingMinutes = 60,
+            priority = TaskPriority.MEDIUM,
+            schedulingMode = TaskSchedulingMode.FLEXIBLE_TIME,
+            fixedStartAt = fixedTime,
+            fixedEndAt = fixedTime.plusSeconds(3600),
+        )
+
+        // Block May 18 (Monday) 14:00 slot
+        val busyDay = ZonedDateTime.of(LocalDate.of(2026, 5, 18), LocalTime.of(14, 0), zone).toInstant()
+        val busy = listOf(
+            SchedulerEngine.BusyWindow(
+                startAt = busyDay,
+                endAt = busyDay.plusSeconds(3600),
+            ),
+        )
+
+        val plan = scheduler.rebuildSchedule(
+            tasks = listOf(task),
+            existingBlocks = emptyList(),
+            busyWindows = busy,
+            workHours = workHours,
+            timePeriods = timePeriods,
+            policy = policy,
+            rangeStart = start,
+            reason = ScheduleRebuildReason.ManualRebuild,
+        )
+
+        val block = plan.blocks.single { it.taskId == task.id }
+        val blockTime = block.startAt.atZone(zone).toLocalTime()
+        val blockDate = block.startAt.atZone(zone).toLocalDate()
+        assertEquals(LocalTime.of(14, 0), blockTime)
+        // Should have moved to May 19 (Tuesday) since May 18 (Monday) 14:00 is busy
+        assertEquals(LocalDate.of(2026, 5, 19), blockDate)
+    }
+
+    @Test
+    fun `FLEXIBLE_TIME block preserved at correct time-of-day in full rebuild`() {
+        val start = ZonedDateTime.of(LocalDate.of(2026, 5, 18), LocalTime.of(8, 0), zone).toInstant()
+        val fixedTime = ZonedDateTime.of(LocalDate.of(2026, 5, 19), LocalTime.of(14, 0), zone).toInstant()
+        val task = task(
+            id = "ft-3",
+            deadline = ZonedDateTime.of(LocalDate.of(2026, 5, 25), LocalTime.of(17, 0), zone).toInstant(),
+            estimatedMinutes = 60,
+            remainingMinutes = 60,
+            priority = TaskPriority.MEDIUM,
+            schedulingMode = TaskSchedulingMode.FLEXIBLE_TIME,
+            fixedStartAt = fixedTime,
+            fixedEndAt = fixedTime.plusSeconds(3600),
+        )
+
+        val plan = scheduler.rebuildSchedule(
+            tasks = listOf(task),
+            existingBlocks = emptyList(),
+            busyWindows = emptyList(),
+            workHours = workHours,
+            timePeriods = timePeriods,
+            policy = policy,
+            rangeStart = start,
+            reason = ScheduleRebuildReason.ManualRebuild,
+        )
+
+        val block = plan.blocks.single { it.taskId == task.id }
+        val blockTime = block.startAt.atZone(zone).toLocalTime()
+        assertEquals(LocalTime.of(14, 0), blockTime)
+    }
+
+    @Test
+    fun `FLEXIBLE_TIME does not schedule before fixedStartAt`() {
+        val start = ZonedDateTime.of(LocalDate.of(2026, 5, 18), LocalTime.of(8, 0), zone).toInstant()
+        val futureStart = ZonedDateTime.of(LocalDate.of(2026, 5, 20), LocalTime.of(14, 0), zone).toInstant()
+        val task = task(
+            id = "ft-4",
+            deadline = ZonedDateTime.of(LocalDate.of(2026, 5, 25), LocalTime.of(17, 0), zone).toInstant(),
+            estimatedMinutes = 60,
+            remainingMinutes = 60,
+            priority = TaskPriority.MEDIUM,
+            schedulingMode = TaskSchedulingMode.FLEXIBLE_TIME,
+            fixedStartAt = futureStart,
+            fixedEndAt = futureStart.plusSeconds(3600),
+        )
+
+        val plan = scheduler.rebuildSchedule(
+            tasks = listOf(task),
+            existingBlocks = emptyList(),
+            busyWindows = emptyList(),
+            workHours = workHours,
+            timePeriods = timePeriods,
+            policy = policy,
+            rangeStart = start,
+            reason = ScheduleRebuildReason.ManualRebuild,
+        )
+
+        val block = plan.blocks.single { it.taskId == task.id }
+        // Should not be scheduled before May 20
+        assertTrue(block.startAt >= futureStart)
+    }
+
+    @Test
+    fun `FLEXIBLE_TIME unscheduled when deadline is before fixedStartAt`() {
+        val start = ZonedDateTime.of(LocalDate.of(2026, 5, 18), LocalTime.of(8, 0), zone).toInstant()
+        val fixedTime = ZonedDateTime.of(LocalDate.of(2026, 5, 18), LocalTime.of(14, 0), zone).toInstant()
+        val task = task(
+            id = "ft-5",
+            deadline = ZonedDateTime.of(LocalDate.of(2026, 5, 18), LocalTime.of(13, 0), zone).toInstant(),
+            estimatedMinutes = 60,
+            remainingMinutes = 60,
+            priority = TaskPriority.MEDIUM,
+            schedulingMode = TaskSchedulingMode.FLEXIBLE_TIME,
+            fixedStartAt = fixedTime,
+            fixedEndAt = fixedTime.plusSeconds(3600),
+        )
+
+        val plan = scheduler.rebuildSchedule(
+            tasks = listOf(task),
+            existingBlocks = emptyList(),
+            busyWindows = emptyList(),
+            workHours = workHours,
+            timePeriods = timePeriods,
+            policy = policy,
+            rangeStart = start,
+            reason = ScheduleRebuildReason.ManualRebuild,
+        )
+
+        assertEquals(0, plan.blocks.count { it.taskId == task.id })
+    }
+
     private fun task(
         id: String,
         deadline: Instant,
@@ -1265,4 +1434,140 @@ class SchedulerEngineTest {
         recurrenceRule = RecurrenceRule(),
         status = TaskStatus.ACTIVE,
     )
+
+    @Test
+    fun `blocker FIXED_EXACT does not overlap sleep`() {
+        val date = LocalDate.of(2026, 6, 10)
+        val sleepStart = ZonedDateTime.of(date, LocalTime.of(22, 0), zone).toInstant()
+        val sleepEnd = ZonedDateTime.of(date.plusDays(1), LocalTime.of(6, 0), zone).toInstant()
+        val blockerStart = ZonedDateTime.of(date, LocalTime.of(23, 0), zone).toInstant()
+        val blockerEnd = ZonedDateTime.of(date.plusDays(1), LocalTime.of(0, 0), zone).toInstant()
+
+        val sleepTask = ScheduleTask(
+            id = "sleep-task",
+            title = "Sleep",
+            taskKind = dev.codex.reclaimoss.domain.model.TaskKind.SLEEP,
+            priority = TaskPriority.URGENT,
+            hasDeadline = false,
+            allowSplitting = false,
+            schedulingMode = TaskSchedulingMode.FLEXIBLE,
+            fixedStartAt = sleepStart,
+            fixedEndAt = sleepEnd,
+            dueAt = sleepEnd,
+            estimatedMinutes = 480,
+            remainingMinutes = 480,
+            overlapPolicy = TaskOverlapPolicy.DISALLOW,
+            status = TaskStatus.ACTIVE,
+        )
+        val blockerTask = ScheduleTask(
+            id = "night-meeting",
+            title = "Night Meeting",
+            taskKind = dev.codex.reclaimoss.domain.model.TaskKind.BLOCKER,
+            priority = TaskPriority.HIGH,
+            hasDeadline = false,
+            allowSplitting = false,
+            schedulingMode = TaskSchedulingMode.FIXED_EXACT,
+            fixedStartAt = blockerStart,
+            fixedEndAt = blockerEnd,
+            dueAt = blockerEnd,
+            estimatedMinutes = 0,
+            remainingMinutes = 0,
+            overlapPolicy = TaskOverlapPolicy.DISALLOW,
+            status = TaskStatus.ACTIVE,
+        )
+
+        val fullDayHours = WorkHoursProfile(
+            timezone = zone.id,
+            days = DayOfWeek.entries.associateWith {
+                WorkHoursDay(windows = listOf(TimeWindow(LocalTime.of(0, 0), LocalTime.of(23, 59, 59))))
+            },
+        )
+
+        val plan = scheduler.rebuildSchedule(
+            tasks = listOf(sleepTask, blockerTask),
+            existingBlocks = emptyList(),
+            busyWindows = emptyList(),
+            workHours = fullDayHours,
+            timePeriods = emptyList(),
+            policy = policy,
+            rangeStart = ZonedDateTime.of(date, LocalTime.of(20, 0), zone).toInstant(),
+            reason = ScheduleRebuildReason.ManualRebuild,
+        )
+
+        val sleepBlocks = plan.blocks.filter { it.taskId == "sleep-task" }
+        val blockerBlocks = plan.blocks.filter { it.taskId == "night-meeting" }
+        val issue = plan.issues.firstOrNull { it.taskId == "night-meeting" }
+
+        assertTrue("Sleep should have its block", sleepBlocks.isNotEmpty())
+        assertTrue("Blocker inside sleep should not have a block", blockerBlocks.isEmpty())
+        assertTrue("Blocker should be unscheduled", issue != null && issue.type == SchedulingIssueType.UNSCHEDULED)
+    }
+
+    @Test
+    fun `blocker FIXED_EXACT with work does not overlap sleep`() {
+        val date = LocalDate.of(2026, 6, 10)
+        val sleepStart = ZonedDateTime.of(date, LocalTime.of(22, 0), zone).toInstant()
+        val sleepEnd = ZonedDateTime.of(date.plusDays(1), LocalTime.of(6, 0), zone).toInstant()
+        val blockerStart = ZonedDateTime.of(date, LocalTime.of(23, 0), zone).toInstant()
+        val blockerEnd = ZonedDateTime.of(date.plusDays(1), LocalTime.of(0, 0), zone).toInstant()
+
+        val sleepTask = ScheduleTask(
+            id = "sleep-task",
+            title = "Sleep",
+            taskKind = dev.codex.reclaimoss.domain.model.TaskKind.SLEEP,
+            priority = TaskPriority.URGENT,
+            hasDeadline = false,
+            allowSplitting = false,
+            schedulingMode = TaskSchedulingMode.FLEXIBLE,
+            fixedStartAt = sleepStart,
+            fixedEndAt = sleepEnd,
+            dueAt = sleepEnd,
+            estimatedMinutes = 480,
+            remainingMinutes = 480,
+            overlapPolicy = TaskOverlapPolicy.DISALLOW,
+            status = TaskStatus.ACTIVE,
+        )
+        val blockerWithWork = ScheduleTask(
+            id = "meeting-work",
+            title = "Meeting + Prep",
+            taskKind = dev.codex.reclaimoss.domain.model.TaskKind.BLOCKER,
+            priority = TaskPriority.HIGH,
+            hasDeadline = false,
+            allowSplitting = true,
+            schedulingMode = TaskSchedulingMode.FIXED_EXACT,
+            fixedStartAt = blockerStart,
+            fixedEndAt = blockerEnd,
+            dueAt = ZonedDateTime.of(date.plusDays(1), LocalTime.of(17, 0), zone).toInstant(),
+            estimatedMinutes = 120,
+            remainingMinutes = 120,
+            overlapPolicy = TaskOverlapPolicy.DISALLOW,
+            status = TaskStatus.ACTIVE,
+        )
+
+        val fullDayHours2 = WorkHoursProfile(
+            timezone = zone.id,
+            days = DayOfWeek.entries.associateWith {
+                WorkHoursDay(windows = listOf(TimeWindow(LocalTime.of(0, 0), LocalTime.of(23, 59, 59))))
+            },
+        )
+
+        val plan = scheduler.rebuildSchedule(
+            tasks = listOf(sleepTask, blockerWithWork),
+            existingBlocks = emptyList(),
+            busyWindows = emptyList(),
+            workHours = fullDayHours2,
+            timePeriods = emptyList(),
+            policy = policy,
+            rangeStart = ZonedDateTime.of(date, LocalTime.of(20, 0), zone).toInstant(),
+            reason = ScheduleRebuildReason.ManualRebuild,
+        )
+
+        val blockerBlocks = plan.blocks.filter { it.taskId == "meeting-work" }
+        val sleepBlocks = plan.blocks.filter { it.taskId == "sleep-task" }
+        val overlap = blockerBlocks.any { b -> sleepBlocks.any { s ->
+            s.startAt < b.endAt && s.endAt > b.startAt
+        } }
+
+        assertTrue("No blocker blocks should overlap sleep", !overlap)
+    }
 }

@@ -178,7 +178,7 @@ fun TimeframeEditorScreen(
     if (showStartSheet) {
         ModalBottomSheet(onDismissRequest = { showStartSheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Start date", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Start date", style = MaterialTheme.typography.titleLarge)
                 DateField(
                     label = "Start",
                     value = formatter.format(draft.startDate),
@@ -207,7 +207,7 @@ fun TimeframeEditorScreen(
     if (showEndSheet) {
         ModalBottomSheet(onDismissRequest = { showEndSheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("End date", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("End date", style = MaterialTheme.typography.titleLarge)
                 DateField(
                     label = "End",
                     value = formatter.format(draft.endDate),
@@ -232,7 +232,7 @@ fun TimeframeEditorScreen(
     if (showColorSheet) {
         ModalBottomSheet(onDismissRequest = { showColorSheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Color", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Color", style = MaterialTheme.typography.titleLarge)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -284,7 +284,7 @@ private fun DateField(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(value, style = MaterialTheme.typography.titleMedium)
         }
     }
 }

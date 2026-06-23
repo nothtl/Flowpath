@@ -1787,7 +1787,7 @@ private fun DaySummarySheet(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(formatter.format(section.date), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(formatter.format(section.date), style = MaterialTheme.typography.titleLarge)
         Text(collapsedDaySummaryText(section), color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (section.timeframes.isNotEmpty()) {
             Text(
